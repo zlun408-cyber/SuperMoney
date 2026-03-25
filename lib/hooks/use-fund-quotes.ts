@@ -1,3 +1,5 @@
+'use client';
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fetchFundQuotes, type FetchFundQuotes } from '@/lib/funds/data-source';
