@@ -79,4 +79,19 @@ describe('useFundQuotes', () => {
     expect(result.current.quotes).toEqual(sampleQuotes);
     expect(result.current.lastUpdatedAt).toBe('2026-03-25T15:30:00.000Z');
   });
+
+  it('supports manual refresh', async () => {
+    const fetchQuotes = vi.fn().mockResolvedValue(sampleQuotes);
+
+    const { result } = renderHook(() => useFundQuotes(['161725'], fetchQuotes, 60_000));
+
+    await flushAsyncWork();
+    expect(fetchQuotes).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(fetchQuotes).toHaveBeenCalledTimes(2);
+  });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fetchFundQuotes, type FetchFundQuotes } from '@/lib/funds/data-source';
 import type { FundCode, FundQuote } from '@/lib/funds/types';
@@ -13,10 +13,13 @@ export function useFundQuotes(
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const previousQuotesRef = useRef<FundQuote[]>([]);
+  const codesRef = useRef(codes);
   const codesKey = codes.join(',');
 
-  useEffect(() => {
-    if (codes.length === 0) {
+  codesRef.current = codes;
+
+  const loadQuotes = useCallback(async () => {
+    if (codesRef.current.length === 0) {
       setQuotes([]);
       setError(null);
       setIsRefreshing(false);
@@ -25,53 +28,45 @@ export function useFundQuotes(
       return;
     }
 
-    let active = true;
+    setIsRefreshing(true);
 
-    const loadQuotes = async () => {
-      setIsRefreshing(true);
+    try {
+      const nextQuotes = await fetcher(codesRef.current);
+      previousQuotesRef.current = nextQuotes;
+      setQuotes(nextQuotes);
+      setError(null);
+      setLastUpdatedAt(nextQuotes[0]?.updatedAt ?? null);
+    } catch (caughtError) {
+      const previousQuotes = Array.isArray(previousQuotesRef.current) ? previousQuotesRef.current : [];
+      setQuotes(previousQuotes);
+      setError(caughtError instanceof Error ? caughtError.message : 'unknown error');
+      setLastUpdatedAt(previousQuotes[0]?.updatedAt ?? null);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [fetcher]);
 
-      try {
-        const nextQuotes = await fetcher(codes);
-
-        if (!active) {
-          return;
-        }
-
-        previousQuotesRef.current = nextQuotes;
-        setQuotes(nextQuotes);
-        setError(null);
-        setLastUpdatedAt(nextQuotes[0]?.updatedAt ?? null);
-      } catch (caughtError) {
-        if (!active) {
-          return;
-        }
-
-        const previousQuotes = previousQuotesRef.current ?? [];
-        setQuotes(previousQuotes);
-        setError(caughtError instanceof Error ? caughtError.message : 'unknown error');
-        setLastUpdatedAt(previousQuotes[0]?.updatedAt ?? null);
-      } finally {
-        if (active) {
-          setIsRefreshing(false);
-        }
-      }
-    };
-
+  useEffect(() => {
     void loadQuotes();
+
+    if (codes.length === 0) {
+      return;
+    }
+
     const timer = window.setInterval(() => {
       void loadQuotes();
     }, refreshInterval);
 
     return () => {
-      active = false;
       window.clearInterval(timer);
     };
-  }, [codesKey, fetcher, refreshInterval]);
+  }, [codesKey, loadQuotes, refreshInterval, codes.length]);
 
   return {
     quotes,
     error,
     isRefreshing,
     lastUpdatedAt,
+    refresh: loadQuotes,
   };
 }
