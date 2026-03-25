@@ -12,3 +12,11 @@ export interface PositionSummary {
   currentValue: number | null;
   profit: number | null;
 }
+
+export interface FundQuote {
+  code: FundCode;
+  name: string;
+  estimatedNav: number;
+  changeRate: number;
+  updatedAt: string;
+}
