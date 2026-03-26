@@ -23,9 +23,15 @@
 
 ## 当前阶段结论
 - 已完成第一阶段 MVP 雏形
+- 已完成第一版真实基金估值数据源接入
+- 已完成基金名称/代码搜索添加能力
+- 已完成首页到详情页真实跳转交互
+- 已完成 Playwright E2E 基础流程
 - 已通过 `npm run test`
+- 已通过 `npm run test:e2e`
 - 已通过 `npm run build`
-- 下一步建议优先接入真实基金数据源
+- 可用 `node --experimental-strip-types scripts/check-fund-quote.ts` 真实验证单只基金估值
+- 下一步建议优先决定当前分支如何保留或合并，或开始规划第二阶段
 
 ## 每次结束前建议补充
 - 更新 `PROJECT_STATUS.md`

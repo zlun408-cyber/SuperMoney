@@ -91,7 +91,7 @@ describe('HomePage', () => {
     render(<HomePage />);
 
     expect(screen.getByText('基金实时估值监控')).toBeTruthy();
-    expect(screen.getByText('招商中证白酒指数')).toBeTruthy();
+    expect(screen.getByRole('link', { name: '招商中证白酒指数' }).getAttribute('href')).toBe('/fund/161725');
     expect(screen.getByText('易方达蓝筹精选')).toBeTruthy();
     expect(screen.getByText('161725')).toBeTruthy();
     expect(screen.getByText('1.05')).toBeTruthy();
