@@ -19,12 +19,12 @@
 - 已完成：Playwright E2E 基础流程
 - 已完成：空状态与错误处理验证
 - 已完成：测试通过与生产构建验证
-- 进行中：整理收尾与决定如何保留当前分支成果
+- 已完成：`feature/bootstrap` 已合并回 `master`
 - 未开始：买入记录明细、登录升级
 
 ## 当前主线
 - 当前正在推进：第一阶段 MVP 收尾
-- 下一步：决定当前 `feature/bootstrap` 分支如何保留或合并
+- 下一步：规划第二阶段：买入记录明细录入
 
 ## 关键决策
 - 项目目录名：`SuperFinance`
@@ -34,8 +34,8 @@
 - 第一阶段采用分钟级刷新
 - 第一阶段优先做持仓汇总录入，不先做买入记录明细
 - 推荐技术方向：Next.js + TypeScript + Tailwind CSS + localStorage
-- 当前开发分支：`feature/bootstrap`
-- 当前工作区：`.worktrees/bootstrap`
+- 当前主分支：`master`
+- 当前开发目录：项目主目录 `/Users/zhanglun/Desktop/SuperFinance`
 
 ## 阻塞问题
 - 暂未规划第二阶段买入记录明细实现方式

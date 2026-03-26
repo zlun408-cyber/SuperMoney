@@ -69,3 +69,11 @@
 - 做了：执行 `npm run build`，生产构建通过
 - 结论：第一阶段 MVP 主线已经具备单元测试、真实跳转和基础 E2E 流程
 - 下一步：决定当前 `feature/bootstrap` 分支如何保留或合并，或开始规划第二阶段
+
+## 2026-03-26（分支收尾）
+- 做了：将 `feature/bootstrap` 本地合并回 `master`
+- 做了：在合并后的 `master` 上重新执行 `npm run test`、`npm run test:e2e`、`npm run build`
+- 做了：删除 `feature/bootstrap` 分支
+- 做了：删除 `.worktrees/bootstrap` 残留目录
+- 结论：第一阶段 MVP 成果已经正式回到 `master` 主线
+- 下一步：规划第二阶段：买入记录明细录入
