@@ -1,20 +1,69 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import type { FundTransaction, FundTransactionType } from '@/lib/funds/types';
 
-interface AddTransactionDialogProps {
-  onAddTransaction: (transaction: FundTransaction) => void;
+type AddTransactionDialogProps =
+  | {
+      onAddTransaction: (transaction: FundTransaction) => void;
+      editingTransaction?: null;
+      onUpdateTransaction?: never;
+      onCancelEdit?: () => void;
+    }
+  | {
+      onAddTransaction: (transaction: FundTransaction) => void;
+      editingTransaction: FundTransaction;
+      onUpdateTransaction: (transaction: FundTransaction) => void;
+      onCancelEdit?: () => void;
+    };
+
+function invariantEditingProps(
+  editingTransaction: FundTransaction | null | undefined,
+  onUpdateTransaction: ((transaction: FundTransaction) => void) | undefined
+) {
+  if (editingTransaction && !onUpdateTransaction) {
+    throw new Error('AddTransactionDialog requires onUpdateTransaction when editingTransaction is provided.');
+  }
+}
+
+function resetForm(setters: {
+  setType: (value: FundTransactionType) => void;
+  setTradeDate: (value: string) => void;
+  setAmount: (value: string) => void;
+  setNav: (value: string) => void;
+}) {
+  setters.setType('buy');
+  setters.setTradeDate('');
+  setters.setAmount('');
+  setters.setNav('');
+}
+
+function applyTransactionToForm(
+  transaction: FundTransaction,
+  setters: {
+    setType: (value: FundTransactionType) => void;
+    setTradeDate: (value: string) => void;
+    setAmount: (value: string) => void;
+    setNav: (value: string) => void;
+  }
+) {
+  const values = getFormValues(transaction);
+
+  setters.setType(values.type);
+  setters.setTradeDate(values.tradeDate);
+  setters.setAmount(values.amount);
+  setters.setNav(values.nav);
 }
 
 function buildTransaction(input: {
+  id?: string;
   type: FundTransactionType;
   tradeDate: string;
   amount: string;
   nav: string;
 }): FundTransaction | null {
-  const id = `tx-${Date.now()}`;
+  const id = input.id ?? `tx-${Date.now()}`;
 
   if (!input.tradeDate) {
     return null;
@@ -71,32 +120,76 @@ function buildTransaction(input: {
   };
 }
 
-export function AddTransactionDialog({ onAddTransaction }: AddTransactionDialogProps) {
+function getFormValues(transaction: FundTransaction) {
+  return {
+    type: transaction.type,
+    tradeDate: transaction.tradeDate,
+    amount: String(transaction.type === 'sell' ? transaction.shares : transaction.amount),
+    nav: 'nav' in transaction ? String(transaction.nav) : '',
+  };
+}
+
+export function AddTransactionDialog({
+  onAddTransaction,
+  editingTransaction = null,
+  onUpdateTransaction,
+  onCancelEdit,
+}: AddTransactionDialogProps) {
+  invariantEditingProps(editingTransaction, onUpdateTransaction);
+
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<FundTransactionType>('buy');
   const [tradeDate, setTradeDate] = useState('');
   const [amount, setAmount] = useState('');
   const [nav, setNav] = useState('');
 
+  useEffect(() => {
+    if (editingTransaction) {
+      applyTransactionToForm(editingTransaction, { setType, setTradeDate, setAmount, setNav });
+      setOpen(false);
+      return;
+    }
+
+    resetForm({ setType, setTradeDate, setAmount, setNav });
+  }, [editingTransaction]);
+
+  const isEditing = editingTransaction !== null;
+  const isFormOpen = isEditing || open;
   const usesNav = type !== 'cash_dividend';
   const amountLabel = type === 'sell' ? '份额' : '金额';
-
-  const reset = () => {
-    setType('buy');
-    setTradeDate('');
-    setAmount('');
-    setNav('');
-  };
+  const title = isEditing ? '编辑交易记录' : '交易记录';
+  const description = isEditing ? '修改已有交易记录。' : '添加买入、卖出、现金分红或红利再投资记录。';
 
   const handleSave = () => {
-    const transaction = buildTransaction({ type, tradeDate, amount, nav });
+    const transaction = buildTransaction({
+      id: editingTransaction?.id,
+      type,
+      tradeDate,
+      amount,
+      nav,
+    });
 
     if (!transaction) {
       return;
     }
 
+    if (isEditing) {
+      onUpdateTransaction?.(transaction);
+      return;
+    }
+
     onAddTransaction(transaction);
-    reset();
+    resetForm({ setType, setTradeDate, setAmount, setNav });
+    setOpen(false);
+  };
+
+  const handleCancel = () => {
+    if (isEditing) {
+      onCancelEdit?.();
+      return;
+    }
+
+    resetForm({ setType, setTradeDate, setAmount, setNav });
     setOpen(false);
   };
 
@@ -104,15 +197,26 @@ export function AddTransactionDialog({ onAddTransaction }: AddTransactionDialogP
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">交易记录</h2>
-          <p className="mt-1 text-sm text-slate-500">添加买入、卖出、现金分红或红利再投资记录。</p>
+          <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+          <p className="mt-1 text-sm text-slate-500">{description}</p>
         </div>
-        <button className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white" onClick={() => setOpen(true)} type="button">
+        <button
+          className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white"
+          onClick={() => {
+            if (isEditing) {
+              return;
+            }
+
+            resetForm({ setType, setTradeDate, setAmount, setNav });
+            setOpen(true);
+          }}
+          type="button"
+        >
           添加交易记录
         </button>
       </div>
 
-      {open ? (
+      {isFormOpen ? (
         <div className="mt-4 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
           <label className="grid gap-1 text-sm text-slate-700">
             <span>记录类型</span>
@@ -162,16 +266,9 @@ export function AddTransactionDialog({ onAddTransaction }: AddTransactionDialogP
 
           <div className="flex gap-2">
             <button className="rounded-lg bg-emerald-600 px-3 py-2 text-sm text-white" onClick={handleSave} type="button">
-              保存记录
+              {isEditing ? '保存修改' : '保存记录'}
             </button>
-            <button
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              onClick={() => {
-                reset();
-                setOpen(false);
-              }}
-              type="button"
-            >
+            <button className="rounded-lg border border-slate-300 px-3 py-2 text-sm" onClick={handleCancel} type="button">
               取消
             </button>
           </div>

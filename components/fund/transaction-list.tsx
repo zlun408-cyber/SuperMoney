@@ -6,6 +6,8 @@ import type { FundTransaction } from '@/lib/funds/types';
 
 interface TransactionListProps {
   transactions: FundTransaction[];
+  onEditTransaction?: (transaction: FundTransaction) => void;
+  onDeleteTransaction?: (transaction: FundTransaction) => void;
 }
 
 function getTypeLabel(type: FundTransaction['type']) {
@@ -29,7 +31,11 @@ function getValueText(transaction: FundTransaction) {
   return `金额 ${transaction.amount}`;
 }
 
-export function TransactionList({ transactions }: TransactionListProps) {
+function getActionLabel(action: '编辑' | '删除', transaction: FundTransaction) {
+  return `${action} ${transaction.tradeDate} ${getTypeLabel(transaction.type)}记录`;
+}
+
+export function TransactionList({ transactions, onEditTransaction, onDeleteTransaction }: TransactionListProps) {
   if (transactions.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center text-slate-500">
@@ -49,6 +55,24 @@ export function TransactionList({ transactions }: TransactionListProps) {
               <p className="mt-1 text-sm text-slate-500">
                 {transaction.tradeDate} · {getValueText(transaction)}
               </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                aria-label={getActionLabel('编辑', transaction)}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700"
+                onClick={() => onEditTransaction?.(transaction)}
+                type="button"
+              >
+                编辑
+              </button>
+              <button
+                aria-label={getActionLabel('删除', transaction)}
+                className="rounded-lg border border-rose-200 px-3 py-2 text-sm text-rose-600"
+                onClick={() => onDeleteTransaction?.(transaction)}
+                type="button"
+              >
+                删除
+              </button>
             </div>
           </li>
         ))}
