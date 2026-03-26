@@ -1,4 +1,5 @@
 import React from 'react';
+import Link from 'next/link';
 
 import { calculatePositionSummary } from '@/lib/calculations/profit-loss';
 import type { FundQuote } from '@/lib/funds/types';
@@ -54,7 +55,11 @@ export function WatchlistTable({ funds, quotesByCode, onEditPosition, onRemoveFu
 
             return (
               <tr key={fund.code}>
-                <td className="px-4 py-3 font-medium text-slate-900">{fund.name}</td>
+                <td className="px-4 py-3 font-medium text-slate-900">
+                  <Link className="hover:text-emerald-600 hover:underline" href={`/fund/${fund.code}`}>
+                    {fund.name}
+                  </Link>
+                </td>
                 <td className="px-4 py-3 text-slate-600">{fund.code}</td>
                 <td className="px-4 py-3 text-slate-900">{formatNumber(quote?.estimatedNav)}</td>
                 <td className="px-4 py-3 text-slate-900">{formatPercent(quote?.changeRate)}</td>

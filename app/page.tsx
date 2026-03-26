@@ -31,7 +31,7 @@ export default function HomePage() {
           <p className="mt-2 text-slate-600">先聚焦自选基金列表，分钟级查看估值、持仓与估算盈亏。</p>
         </div>
         <div className="flex gap-3">
-          <AddFundDialog onAddFund={addFund} />
+          <AddFundDialog onAddFund={addFund} existingCodes={watchlist.map((fund) => fund.code)} />
           <button className="rounded-xl border border-slate-300 bg-white px-4 py-2" onClick={() => void refresh()}>
             手动刷新
           </button>

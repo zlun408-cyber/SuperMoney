@@ -20,3 +20,10 @@ export interface FundQuote {
   changeRate: number;
   updatedAt: string;
 }
+
+export interface FundSearchResult {
+  code: FundCode;
+  name: string;
+  category: string;
+  fundType: string;
+}
