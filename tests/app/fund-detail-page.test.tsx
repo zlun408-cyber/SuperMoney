@@ -7,6 +7,15 @@ let mockWatchlist = [
     code: '161725',
     name: '招商中证白酒指数',
     position: { amount: 1000, cost: 900, shares: 1000 },
+    transactions: [
+      {
+        id: 'buy-1',
+        type: 'buy',
+        tradeDate: '2026-03-01',
+        amount: 1000,
+        nav: 1,
+      },
+    ],
   },
 ];
 
@@ -26,6 +35,9 @@ vi.mock('@/lib/hooks/use-watchlist', () => ({
     addFund: vi.fn(),
     removeFund: vi.fn(),
     updatePosition: vi.fn(),
+    addTransaction: vi.fn(),
+    updateTransaction: vi.fn(),
+    removeTransaction: vi.fn(),
   }),
 }));
 
@@ -48,6 +60,15 @@ afterEach(() => {
       code: '161725',
       name: '招商中证白酒指数',
       position: { amount: 1000, cost: 900, shares: 1000 },
+      transactions: [
+        {
+          id: 'buy-1',
+          type: 'buy',
+          tradeDate: '2026-03-01',
+          amount: 1000,
+          nav: 1,
+        },
+      ],
     },
   ];
   mockQuotes = [
@@ -72,7 +93,55 @@ describe('FundDetailPage', () => {
     expect(screen.getByText('当前估值')).toBeTruthy();
     expect(screen.getByText('1.05')).toBeTruthy();
     expect(screen.getByText('估算盈亏')).toBeTruthy();
-    expect(screen.getByText('150.00')).toBeTruthy();
+    expect(screen.getByText('50.00')).toBeTruthy();
+    expect(screen.getAllByText('交易记录').length).toBeGreaterThan(0);
+    expect(screen.getByText('买入')).toBeTruthy();
+    expect(screen.getByText(/2026-03-01/)).toBeTruthy();
+  });
+
+
+  it('prefers transaction-derived summary values when transactions exist', async () => {
+    mockWatchlist = [
+      {
+        code: '161725',
+        name: '招商中证白酒指数',
+        position: { amount: 9999, cost: 9999, shares: 9999 },
+        transactions: [
+          {
+            id: 'buy-1',
+            type: 'buy',
+            tradeDate: '2026-03-01',
+            amount: 1000,
+            nav: 1,
+          },
+          {
+            id: 'sell-1',
+            type: 'sell',
+            tradeDate: '2026-03-02',
+            shares: 200,
+            nav: 1.2,
+          },
+        ],
+      },
+    ];
+    mockQuotes = [
+      {
+        code: '161725',
+        name: '招商中证白酒指数',
+        estimatedNav: 1.5,
+        changeRate: 0.52,
+        updatedAt: '2026-03-25T15:30:00.000Z',
+      },
+    ];
+
+    const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
+    render(page);
+
+    expect(screen.getByText('持仓成本')).toBeTruthy();
+    expect(screen.getByText('800.00')).toBeTruthy();
+    expect(screen.getByText('估算盈亏')).toBeTruthy();
+    expect(screen.getByText('400.00')).toBeTruthy();
+    expect(screen.queryByText('9999.00')).toBeNull();
   });
 
   it('shows fallback text when no position exists', async () => {
@@ -92,5 +161,14 @@ describe('FundDetailPage', () => {
     render(page);
 
     expect(screen.getByText('没有找到这只基金，请先回到首页添加。')).toBeTruthy();
+  });
+
+  it('shows an empty transaction message when there are no transactions', async () => {
+    mockWatchlist = [{ code: '161725', name: '招商中证白酒指数', transactions: [] }];
+
+    const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
+    render(page);
+
+    expect(screen.getByText('还没有交易记录，请先添加第一笔记录。')).toBeTruthy();
   });
 });

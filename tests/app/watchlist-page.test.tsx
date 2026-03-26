@@ -14,6 +14,27 @@ let mockWatchlist = [
     code: '005827',
     name: '易方达蓝筹精选',
   },
+  {
+    code: '163406',
+    name: '兴全合润混合',
+    position: { amount: 9999, cost: 9999, shares: 9999 },
+    transactions: [
+      {
+        id: 'buy-1',
+        type: 'buy',
+        tradeDate: '2026-03-20',
+        amount: 1000,
+        nav: 1,
+      },
+      {
+        id: 'sell-1',
+        type: 'sell',
+        tradeDate: '2026-03-22',
+        shares: 200,
+        nav: 1.2,
+      },
+    ],
+  },
 ];
 
 let mockQuotes = [
@@ -29,6 +50,13 @@ let mockQuotes = [
     name: '易方达蓝筹精选',
     estimatedNav: 2.13,
     changeRate: -0.18,
+    updatedAt: '2026-03-25T15:30:00.000Z',
+  },
+  {
+    code: '163406',
+    name: '兴全合润混合',
+    estimatedNav: 1.5,
+    changeRate: 1.23,
     updatedAt: '2026-03-25T15:30:00.000Z',
   },
 ];
@@ -66,6 +94,27 @@ afterEach(() => {
       code: '005827',
       name: '易方达蓝筹精选',
     },
+    {
+      code: '163406',
+      name: '兴全合润混合',
+      position: { amount: 9999, cost: 9999, shares: 9999 },
+      transactions: [
+        {
+          id: 'buy-1',
+          type: 'buy',
+          tradeDate: '2026-03-20',
+          amount: 1000,
+          nav: 1,
+        },
+        {
+          id: 'sell-1',
+          type: 'sell',
+          tradeDate: '2026-03-22',
+          shares: 200,
+          nav: 1.2,
+        },
+      ],
+    },
   ];
   mockQuotes = [
     {
@@ -80,6 +129,13 @@ afterEach(() => {
       name: '易方达蓝筹精选',
       estimatedNav: 2.13,
       changeRate: -0.18,
+      updatedAt: '2026-03-25T15:30:00.000Z',
+    },
+    {
+      code: '163406',
+      name: '兴全合润混合',
+      estimatedNav: 1.5,
+      changeRate: 1.23,
       updatedAt: '2026-03-25T15:30:00.000Z',
     },
   ];
@@ -104,6 +160,15 @@ describe('HomePage', () => {
 
     expect(screen.getAllByText('本次刷新失败，当前显示的是上次数据').length).toBeGreaterThan(0);
     expect(screen.getByText('005827')).toBeTruthy();
+  });
+
+  it('prefers transaction-derived summary values when transactions exist', () => {
+    render(<HomePage />);
+
+    expect(screen.getByRole('link', { name: '兴全合润混合' }).getAttribute('href')).toBe('/fund/163406');
+    expect(screen.getByText('成本 800.00 / 份额 800.00')).toBeTruthy();
+    expect(screen.getByText('400.00')).toBeTruthy();
+    expect(screen.queryByText('成本 9999.00 / 份额 9999.00')).toBeNull();
   });
 
   it('shows an empty-state message when the watchlist is empty', () => {

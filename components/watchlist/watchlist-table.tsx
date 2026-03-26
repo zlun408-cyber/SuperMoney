@@ -2,6 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 
 import { calculatePositionSummary } from '@/lib/calculations/profit-loss';
+import { calculateTransactionLedgerSummary } from '@/lib/funds/transactions';
 import type { FundQuote } from '@/lib/funds/types';
 import type { WatchlistFund } from '@/lib/storage/watchlist-storage';
 
@@ -46,12 +47,25 @@ export function WatchlistTable({ funds, quotesByCode, onEditPosition, onRemoveFu
         <tbody className="divide-y divide-slate-100">
           {funds.map((fund) => {
             const quote = quotesByCode[fund.code];
+            const ledgerSummary = fund.transactions?.length
+              ? calculateTransactionLedgerSummary(fund.transactions, quote?.estimatedNav)
+              : null;
             const summary = calculatePositionSummary({
               cost: fund.position?.cost,
               estimatedNav: quote?.estimatedNav,
               shares: fund.position?.shares,
               amount: fund.position?.amount,
             });
+            const holdingText = ledgerSummary
+              ? `成本 ${formatNumber(ledgerSummary.currentCost)} / 份额 ${formatNumber(ledgerSummary.currentShares)}`
+              : fund.position?.cost && fund.position?.shares
+                ? `成本 ${formatNumber(fund.position.cost)} / 份额 ${formatNumber(fund.position.shares)}`
+                : '待填写';
+            const profitText = ledgerSummary
+              ? formatNumber(ledgerSummary.unrealizedProfit)
+              : summary.isComputable
+                ? formatNumber(summary.profit)
+                : '待填写';
 
             return (
               <tr key={fund.code}>
@@ -63,14 +77,8 @@ export function WatchlistTable({ funds, quotesByCode, onEditPosition, onRemoveFu
                 <td className="px-4 py-3 text-slate-600">{fund.code}</td>
                 <td className="px-4 py-3 text-slate-900">{formatNumber(quote?.estimatedNav)}</td>
                 <td className="px-4 py-3 text-slate-900">{formatPercent(quote?.changeRate)}</td>
-                <td className="px-4 py-3 text-slate-600">
-                  {fund.position?.cost && fund.position?.shares
-                    ? `成本 ${formatNumber(fund.position.cost)} / 份额 ${formatNumber(fund.position.shares)}`
-                    : '待填写'}
-                </td>
-                <td className="px-4 py-3 text-slate-900">
-                  {summary.isComputable ? formatNumber(summary.profit) : '待填写'}
-                </td>
+                <td className="px-4 py-3 text-slate-600">{holdingText}</td>
+                <td className="px-4 py-3 text-slate-900">{profitText}</td>
                 <td className="px-4 py-3">
                   <div className="flex gap-2">
                     <button className="rounded-lg border border-slate-300 px-3 py-1.5" onClick={() => onEditPosition(fund)}>

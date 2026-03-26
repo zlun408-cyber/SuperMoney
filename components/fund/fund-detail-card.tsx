@@ -3,6 +3,7 @@
 import React from 'react';
 
 import { calculatePositionSummary } from '@/lib/calculations/profit-loss';
+import { calculateTransactionLedgerSummary } from '@/lib/funds/transactions';
 import type { FundQuote } from '@/lib/funds/types';
 import type { WatchlistFund } from '@/lib/storage/watchlist-storage';
 
@@ -16,12 +17,17 @@ function formatNumber(value: number | null | undefined) {
 }
 
 export function FundDetailCard({ fund, quote }: FundDetailCardProps) {
+  const ledgerSummary = fund.transactions?.length
+    ? calculateTransactionLedgerSummary(fund.transactions, quote?.estimatedNav)
+    : null;
   const summary = calculatePositionSummary({
     cost: fund.position?.cost,
     shares: fund.position?.shares,
     amount: fund.position?.amount,
     estimatedNav: quote?.estimatedNav,
   });
+  const currentCost = ledgerSummary ? ledgerSummary.currentCost : fund.position?.cost;
+  const estimatedProfit = ledgerSummary ? ledgerSummary.unrealizedProfit : summary.isComputable ? summary.profit : null;
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -48,12 +54,12 @@ export function FundDetailCard({ fund, quote }: FundDetailCardProps) {
         </div>
         <div className="rounded-xl bg-slate-50 p-4">
           <p className="text-sm text-slate-500">持仓成本</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-900">{formatNumber(fund.position?.cost)}</p>
+          <p className="mt-2 text-2xl font-semibold text-slate-900">{formatNumber(currentCost)}</p>
         </div>
         <div className="rounded-xl bg-slate-50 p-4">
           <p className="text-sm text-slate-500">估算盈亏</p>
           <p className="mt-2 text-2xl font-semibold text-slate-900">
-            {summary.isComputable ? formatNumber(summary.profit) : '待填写'}
+            {formatNumber(estimatedProfit)}
           </p>
         </div>
       </div>
