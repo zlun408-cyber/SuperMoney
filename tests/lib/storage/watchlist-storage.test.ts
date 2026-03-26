@@ -11,6 +11,15 @@ const sampleWatchlist = [
       cost: 900,
       shares: 1000,
     },
+    transactions: [
+      {
+        id: 'buy-1',
+        type: 'buy',
+        tradeDate: '2026-03-01',
+        amount: 1000,
+        nav: 1,
+      },
+    ],
   },
 ];
 
@@ -29,6 +38,22 @@ describe('watchlist storage', () => {
     window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(sampleWatchlist));
 
     expect(loadWatchlist()).toEqual(sampleWatchlist);
+  });
+
+  it('keeps transaction records when loading saved watchlist data', () => {
+    window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(sampleWatchlist));
+
+    const loaded = loadWatchlist();
+
+    expect(loaded[0]?.transactions).toEqual([
+      {
+        id: 'buy-1',
+        type: 'buy',
+        tradeDate: '2026-03-01',
+        amount: 1000,
+        nav: 1,
+      },
+    ]);
   });
 
   it('falls back to an empty list when localStorage data is invalid', () => {

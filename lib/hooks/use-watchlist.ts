@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-import type { PositionInput } from '@/lib/funds/types';
+import type { FundTransaction, PositionInput } from '@/lib/funds/types';
 import { loadWatchlist, saveWatchlist, type WatchlistFund } from '@/lib/storage/watchlist-storage';
 
 interface AddFundInput {
@@ -52,10 +52,56 @@ export function useWatchlist() {
     );
   };
 
+  const addTransaction = (code: string, transaction: FundTransaction) => {
+    updateWatchlist((current) =>
+      current.map((item) =>
+        item.code === code
+          ? {
+              ...item,
+              transactions: [...(item.transactions ?? []), transaction],
+            }
+          : item,
+      ),
+    );
+  };
+
+  const updateTransaction = (code: string, transactionId: string, transaction: FundTransaction) => {
+    updateWatchlist((current) =>
+      current.map((item) =>
+        item.code === code
+          ? {
+              ...item,
+              transactions: (item.transactions ?? []).map((currentTransaction) =>
+                currentTransaction.id === transactionId ? transaction : currentTransaction,
+              ),
+            }
+          : item,
+      ),
+    );
+  };
+
+  const removeTransaction = (code: string, transactionId: string) => {
+    updateWatchlist((current) =>
+      current.map((item) =>
+        item.code === code
+          ? {
+              ...item,
+              transactions: (item.transactions ?? []).filter(
+                (currentTransaction) => currentTransaction.id !== transactionId,
+              ),
+            }
+          : item,
+      ),
+    );
+  };
+
   return {
     watchlist,
     addFund,
     removeFund,
     updatePosition,
+    addTransaction,
+    updateTransaction,
+    removeTransaction,
   };
 }

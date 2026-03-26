@@ -58,4 +58,67 @@ describe('useWatchlist', () => {
 
     expect(result.current.watchlist).toHaveLength(0);
   });
+
+  it('adds a transaction record to an existing fund', () => {
+    const { result } = renderHook(() => useWatchlist());
+
+    act(() => {
+      result.current.addFund(sampleFund);
+      result.current.addTransaction('161725', {
+        id: 'buy-1',
+        type: 'buy',
+        tradeDate: '2026-03-01',
+        amount: 1000,
+        nav: 1,
+      });
+    });
+
+    expect(result.current.watchlist[0]?.transactions).toHaveLength(1);
+    expect(result.current.watchlist[0]?.transactions?.[0]?.id).toBe('buy-1');
+  });
+
+  it('updates an existing transaction record', () => {
+    const { result } = renderHook(() => useWatchlist());
+
+    act(() => {
+      result.current.addFund(sampleFund);
+      result.current.addTransaction('161725', {
+        id: 'buy-1',
+        type: 'buy',
+        tradeDate: '2026-03-01',
+        amount: 1000,
+        nav: 1,
+      });
+      result.current.updateTransaction('161725', 'buy-1', {
+        id: 'buy-1',
+        type: 'buy',
+        tradeDate: '2026-03-01',
+        amount: 1200,
+        nav: 1,
+      });
+    });
+
+    expect(result.current.watchlist[0]?.transactions?.[0]).toMatchObject({
+      id: 'buy-1',
+      amount: 1200,
+    });
+  });
+
+  it('removes a transaction record from an existing fund', () => {
+    const { result } = renderHook(() => useWatchlist());
+
+    act(() => {
+      result.current.addFund(sampleFund);
+      result.current.addTransaction('161725', {
+        id: 'buy-1',
+        type: 'buy',
+        tradeDate: '2026-03-01',
+        amount: 1000,
+        nav: 1,
+      });
+      result.current.removeTransaction('161725', 'buy-1');
+    });
+
+    expect(result.current.watchlist[0]?.transactions ?? []).toHaveLength(0);
+  });
 });

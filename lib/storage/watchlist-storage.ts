@@ -1,4 +1,4 @@
-import type { PositionInput } from '@/lib/funds/types';
+import type { FundTransaction, PositionInput } from '@/lib/funds/types';
 
 export const WATCHLIST_STORAGE_KEY = 'super-finance-watchlist';
 
@@ -6,6 +6,7 @@ export interface WatchlistFund {
   code: string;
   name: string;
   position?: PositionInput;
+  transactions?: FundTransaction[];
 }
 
 export function loadWatchlist(): WatchlistFund[] {
