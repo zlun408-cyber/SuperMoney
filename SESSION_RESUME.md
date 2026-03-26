@@ -3,26 +3,35 @@
 ## 这个文件的作用
 如果你不小心关闭了终端、聊天窗口，或者下次换了新窗口继续做项目，可以先看这个文件，快速恢复进度。
 
-## 下次继续前，先看这 4 个文件
+## 下次继续前，先看这 6 个文件
 1. `PROJECT_STATUS.md`
 2. `WORKLOG.md`
 3. `NEXT_STEPS.md`
-4. `docs/superpowers/specs/2026-03-25-fund-monitoring-design.md`
-5. `docs/superpowers/plans/2026-03-25-fund-monitoring-mvp.md`
+4. `SESSION_RESUME.md`
+5. `docs/superpowers/specs/2026-03-25-fund-monitoring-design.md`
+6. `docs/superpowers/plans/2026-03-25-fund-monitoring-mvp.md`
 
 ## 下次打开后，建议直接对助手说的话
-请继续推进“基金实时估值网站”主线。项目目录在 `/Users/zhanglun/Desktop/SuperFinance`。请先读取 `PROJECT_STATUS.md`、`WORKLOG.md`、`NEXT_STEPS.md`、`SESSION_RESUME.md`，以及 `docs/superpowers/specs/2026-03-25-fund-monitoring-design.md` 和 `docs/superpowers/plans/2026-03-25-fund-monitoring-mvp.md`，然后告诉我当前进度和下一步建议。
+请继续推进“基金实时估值网站”主线。项目目录在 `/Users/zhanglun/Desktop/SuperFinance`。当前开发工作区在 `/Users/zhanglun/Desktop/SuperFinance/.worktrees/bootstrap`，分支是 `feature/bootstrap`。请先读取 `PROJECT_STATUS.md`、`WORKLOG.md`、`NEXT_STEPS.md`、`SESSION_RESUME.md`，以及 `docs/superpowers/specs/2026-03-25-fund-monitoring-design.md` 和 `docs/superpowers/plans/2026-03-25-fund-monitoring-mvp.md`，然后告诉我当前进度和下一步建议。
 
 ## 恢复时你要先确认的事情
 - 当前项目目标有没有变化
+- 当前是在主目录还是 worktree 里开发
 - 上次做到哪里
 - 下一步第一件事是什么
 - 有没有新的阻塞问题
 
 ## 当前阶段结论
-- 已完成第一阶段需求设计
-- 已完成第一阶段实现计划
-- 下一步是初始化项目脚手架
+- 已完成第一阶段 MVP 雏形
+- 已完成第一版真实基金估值数据源接入
+- 已完成基金名称/代码搜索添加能力
+- 已完成首页到详情页真实跳转交互
+- 已完成 Playwright E2E 基础流程
+- 已通过 `npm run test`
+- 已通过 `npm run test:e2e`
+- 已通过 `npm run build`
+- 可用 `node --experimental-strip-types scripts/check-fund-quote.ts` 真实验证单只基金估值
+- 下一步建议优先决定当前分支如何保留或合并，或开始规划第二阶段
 
 ## 每次结束前建议补充
 - 更新 `PROJECT_STATUS.md`
