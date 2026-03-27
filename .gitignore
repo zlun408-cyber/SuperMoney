@@ -2,5 +2,7 @@
 .worktrees/
 node_modules/
 .next/
+.env.local
+.env*.local
 playwright-report/
 test-results/

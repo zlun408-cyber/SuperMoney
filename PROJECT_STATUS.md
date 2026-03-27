@@ -27,15 +27,24 @@
 - 已完成：交易流水端到端主流程验证
 - 已完成：交易记录编辑 / 删除 UI
 - 已完成：交易记录字段错误提示与卖出超额业务提示
+- 已完成：第三阶段设计文档与实现计划文档
+- 已完成：Supabase 云端观察列表读写帮助层
+- 已完成：登录 / 注册 / 退出入口基础 UI
+- 已完成：已登录走云端、未登录走本地的 watchlist 路径分流
+- 已完成：首次登录本地 / 云端冲突选择基础逻辑
+- 已完成：真实 Supabase 认证状态接入
+- 已完成：Supabase 环境变量示例与建表 SQL
+- 已完成：真实浏览器注册 / 登录 / 刷新恢复 / 冲突弹窗联调
+- 已完成：登录后禁用手工持仓编辑，统一收口到交易记录驱动
 - 已完成：当前代码通过 `npm run test`
-- 已完成：当前代码通过 `npm run test:e2e`
 - 已完成：当前代码通过 `npm run build`
-- 未开始：更细的交互 polish、登录升级
+- 已完成：当前代码通过聚焦回归测试
+- 未开始：`npm run test:e2e` 的第三阶段联动验证
 
 ## 当前主线
-- 当前正在推进：第二阶段“交易明细驱动的持仓与收益系统”增强收尾
-- 当前完成到：交易记录新增、编辑、删除、字段错误提示、卖出超额提示，以及首页/详情页自动汇总
-- 下一步：决定是继续补更细的交互 polish，还是整理本轮增强提交
+- 当前正在推进：第三阶段“登录与云同步”
+- 当前完成到：真实认证状态、云端 / 本地分流、冲突弹窗页面挂接、Supabase 落地文件、真实浏览器联调
+- 下一步：补第三阶段 E2E，或整理本轮主线提交
 
 ## 关键决策
 - 项目目录名：`SuperFinance`
@@ -48,13 +57,17 @@
 - 交易记录编辑复用现有弹层，不新增独立编辑页面
 - 交易记录删除先使用浏览器确认框，保持实现简单稳定
 - 错误提示采用“字段级 + 业务级”双层方式，但只在点击保存时触发
+- 第三阶段采用 Supabase 作为认证与云端存储方案
+- 第三阶段云端结构采用两张表：`watchlist_funds`、`fund_transactions`
+- 首次登录如本地和云端都有数据，不自动合并，必须让用户二选一
+- 本地落地时使用 `.env.local` 提供 `NEXT_PUBLIC_SUPABASE_URL` 与 `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - 推荐技术方向：Next.js + TypeScript + Tailwind CSS + localStorage
 - 当前主分支：`master`
 - 当前开发目录：项目主目录 `/Users/zhanglun/Desktop/SuperFinance`
 
 ## 阻塞问题
 - 暂无硬阻塞
-- 下一步需要决定第二阶段增强是否继续补更细的交互 polish 或表单体验优化
+- 下一步主要是决定是否补第三阶段 E2E，还是先整理当前成果提交
 
 ## 重要文件
 - `PROJECT_STATUS.md`：项目当前状态
@@ -69,3 +82,6 @@
 - `docs/superpowers/plans/2026-03-27-transaction-record-edit-delete.md`：交易记录编辑/删除实现计划
 - `docs/superpowers/specs/2026-03-27-transaction-validation-feedback-design.md`：交易记录错误提示设计文档
 - `docs/superpowers/plans/2026-03-27-transaction-validation-feedback.md`：交易记录错误提示实现计划
+- `docs/superpowers/specs/2026-03-27-stage3-auth-sync-design.md`：第三阶段登录与云同步设计文档
+- `docs/superpowers/plans/2026-03-27-stage3-auth-sync.md`：第三阶段登录与云同步实现计划
+- `docs/superpowers/specs/2026-03-27-stage3-supabase-setup.md`：第三阶段 Supabase 落地说明

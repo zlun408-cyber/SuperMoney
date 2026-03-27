@@ -3,7 +3,7 @@
 ## 这个文件的作用
 如果你不小心关闭了终端、聊天窗口，或者下次换了新窗口继续做项目，可以先看这个文件，快速恢复进度。
 
-## 下次继续前，先看这 12 个文件
+## 下次继续前，先看这 15 个文件
 1. `PROJECT_STATUS.md`
 2. `WORKLOG.md`
 3. `NEXT_STEPS.md`
@@ -16,14 +16,17 @@
 10. `docs/superpowers/plans/2026-03-27-transaction-record-edit-delete.md`
 11. `docs/superpowers/specs/2026-03-27-transaction-validation-feedback-design.md`
 12. `docs/superpowers/plans/2026-03-27-transaction-validation-feedback.md`
+13. `docs/superpowers/specs/2026-03-27-stage3-auth-sync-design.md`
+14. `docs/superpowers/plans/2026-03-27-stage3-auth-sync.md`
+15. `docs/superpowers/specs/2026-03-27-stage3-supabase-setup.md`
 
 ## 下次打开后，建议直接对助手说的话
-请继续推进“基金实时估值网站”主线。项目目录在 `/Users/zhanglun/Desktop/SuperFinance`，当前在 `master` 主分支开发。请先读取 `PROJECT_STATUS.md`、`WORKLOG.md`、`NEXT_STEPS.md`、`SESSION_RESUME.md`，以及第一阶段、第二阶段、交易记录编辑/删除增强、交易记录错误提示增强的 design / plan 文档，然后告诉我当前进度和下一步建议。
+请继续推进“基金实时估值网站”主线。项目目录在 `/Users/zhanglun/Desktop/SuperFinance`，当前在 `master` 主分支开发。请先读取 `PROJECT_STATUS.md`、`WORKLOG.md`、`NEXT_STEPS.md`、`SESSION_RESUME.md`，以及第一阶段、第二阶段、交易记录编辑/删除增强、交易记录错误提示增强、第三阶段登录与云同步、第三阶段 Supabase 落地说明这些文档，然后告诉我当前进度和下一步建议。
 
 ## 恢复时你要先确认的事情
 - 当前项目目标有没有变化
 - 当前是在主目录还是 worktree 里开发
-- 第二阶段增强已经完成到哪里
+- 第三阶段登录与云同步已经完成到哪里
 - 下一步第一件事是什么
 - 有没有新的阻塞问题
 
@@ -33,11 +36,12 @@
 - 已完成交易记录新增、编辑、删除 UI
 - 已完成交易记录字段错误提示与卖出超额业务提示
 - 已完成首页和详情页自动汇总结果
-- 已完成交易流水 E2E 主流程
+- 已完成第三阶段代码接线：真实认证状态、云端读写层、云端 / 本地分流、冲突处理弹窗
+- 已完成第三阶段真实联调：注册、登录、刷新恢复、冲突弹窗
+- 已完成登录后禁用手工持仓编辑，统一使用交易记录驱动
 - 已通过 `npm run test`
-- 已通过 `npm run test:e2e`
 - 已通过 `npm run build`
-- 当前建议下一步：决定是继续补更细的交互 polish，还是先整理本轮增强提交
+- 当前建议下一步：决定是否补第三阶段 E2E，还是先整理当前成果提交
 
 ## 每次结束前建议补充
 - 更新 `PROJECT_STATUS.md`

@@ -124,3 +124,34 @@
 - 做了：执行 `npm run build`，生产构建通过
 - 结论：交易记录表单现在会给出更明确的字段错误和卖出超额提示，基础录入体验更稳
 - 下一步：决定是否继续补更细的交互 polish，或先整理本轮增强提交
+
+## 2026-03-27（第三阶段前半段：登录与云同步基础）
+- 做了：输出第三阶段设计文档 `docs/superpowers/specs/2026-03-27-stage3-auth-sync-design.md`
+- 做了：输出第三阶段实现计划 `docs/superpowers/plans/2026-03-27-stage3-auth-sync.md`
+- 做了：新增 `lib/sync/cloud-watchlist.ts`，打通 watchlist 与云端两张表之间的转换与保存
+- 做了：新增 `lib/supabase/client.ts`，预留浏览器端 Supabase 环境入口
+- 做了：新增登录 / 注册 / 退出入口基础 UI，并挂到全局布局
+- 做了：让 `useWatchlist` 支持未登录走本地、已登录走云端
+- 做了：新增首次登录冲突处理底层逻辑，支持“使用云端数据 / 使用本地数据”
+- 做了：新增冲突选择弹窗组件 `components/auth/sync-conflict-dialog.tsx`
+- 做了：执行聚焦回归测试，33 个测试全部通过
+- 做了：执行 `npm run test`，81 个测试全部通过
+- 做了：定位生产构建报错，修复 `app/layout.tsx` 向客户端组件直接传函数的问题
+- 做了：执行 `npm run build`，生产构建通过
+- 结论：第三阶段前 4 个任务已经打通到可验证状态，底层云同步路径和冲突选择逻辑已经就位
+- 下一步：接入真实 Supabase SDK 与认证状态，把登录结果和冲突弹窗真正连到页面流程
+
+## 2026-03-27（第三阶段后半段：真实 Supabase 接线）
+- 做了：安装 `@supabase/supabase-js`
+- 做了：新增 `lib/auth/auth-context.tsx` 与 `lib/auth/types.ts`，接入真实登录态
+- 做了：让 `AuthEntry` / `HomePage` 读取真实认证状态
+- 做了：把冲突弹窗真正挂到首页登录后的同步流程
+- 做了：新增 `.env.example`
+- 做了：新增 `supabase/stage3-auth-sync.sql`
+- 做了：新增落地说明 `docs/superpowers/specs/2026-03-27-stage3-supabase-setup.md`
+- 做了：完成真实浏览器联调，验证注册、登录、刷新恢复、冲突弹窗出现
+- 做了：新增“登录后禁用手工持仓编辑”的限制，统一引导到交易记录驱动
+- 做了：执行 `npm run test`，83 个测试全部通过
+- 做了：执行 `npm run build`，生产构建通过
+- 结论：第三阶段主线已经完成真实联调，登录与云同步闭环已基本跑通
+- 下一步：决定是否补第三阶段 E2E，还是先整理本轮提交
