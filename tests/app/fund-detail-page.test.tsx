@@ -1,5 +1,5 @@
 import React from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FundQuote, FundTransaction } from '@/lib/funds/types';
 import type { WatchlistFund } from '@/lib/storage/watchlist-storage';
@@ -96,6 +96,15 @@ vi.mock('@/lib/hooks/use-fund-quotes', () => ({
 
 import FundDetailPage from '@/app/fund/[code]/page';
 
+function expectSummaryCardValue(label: string, value: string) {
+  const labelElement = screen.getByText(label);
+  const cardElement = labelElement.closest('div');
+
+  expect(cardElement).toBeTruthy();
+
+  expect(within(cardElement as HTMLElement).getByText(value)).toBeTruthy();
+}
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -136,8 +145,7 @@ describe('FundDetailPage', () => {
     expect(screen.getByText('基金代码：161725')).toBeTruthy();
     expect(screen.getByText('当前估值')).toBeTruthy();
     expect(screen.getByText('1.05')).toBeTruthy();
-    expect(screen.getByText('估算盈亏')).toBeTruthy();
-    expect(screen.getByText('50.00')).toBeTruthy();
+    expectSummaryCardValue('未实现收益', '50.00');
     expect(screen.getAllByText('交易记录').length).toBeGreaterThan(0);
     expect(screen.getByText('买入')).toBeTruthy();
     expect(screen.getByText(/2026-03-01/)).toBeTruthy();
@@ -181,11 +189,96 @@ describe('FundDetailPage', () => {
     const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
     render(page);
 
-    expect(screen.getByText('持仓成本')).toBeTruthy();
-    expect(screen.getByText('800.00')).toBeTruthy();
-    expect(screen.getByText('估算盈亏')).toBeTruthy();
-    expect(screen.getByText('400.00')).toBeTruthy();
+    expectSummaryCardValue('当前成本', '800.00');
+    expectSummaryCardValue('未实现收益', '400.00');
     expect(screen.queryByText('9999.00')).toBeNull();
+  });
+
+  it('shows readable holding and profit breakdown fields when transactions exist', async () => {
+    mockWatchlist = [
+      {
+        code: '161725',
+        name: '招商中证白酒指数',
+        transactions: [
+          {
+            id: 'buy-1',
+            type: 'buy',
+            tradeDate: '2026-03-01',
+            amount: 1000,
+            nav: 1,
+          },
+          {
+            id: 'sell-1',
+            type: 'sell',
+            tradeDate: '2026-03-02',
+            shares: 200,
+            nav: 1.2,
+          },
+          {
+            id: 'cash-dividend-1',
+            type: 'cash_dividend',
+            tradeDate: '2026-03-03',
+            amount: 20,
+          },
+        ],
+      },
+    ];
+    mockQuotes = [
+      {
+        code: '161725',
+        name: '招商中证白酒指数',
+        estimatedNav: 1.5,
+        changeRate: 0.52,
+        updatedAt: '2026-03-25T15:30:00.000Z',
+      },
+    ];
+
+    const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
+    render(page);
+
+    expectSummaryCardValue('当前份额', '800.00');
+    expectSummaryCardValue('平均成本', '1.0000');
+    expectSummaryCardValue('未实现收益', '400.00');
+    expectSummaryCardValue('已实现收益', '60.00');
+    expectSummaryCardValue('累计分红', '20.00');
+    expectSummaryCardValue('总收益', '460.00');
+  });
+
+  it('shows richer transaction row details for reconciliation', async () => {
+    mockWatchlist = [
+      {
+        code: '161725',
+        name: '招商中证白酒指数',
+        transactions: [
+          {
+            id: 'buy-1',
+            type: 'buy',
+            tradeDate: '2026-03-01',
+            amount: 1000,
+            nav: 1.0234,
+            fee: 1.5,
+            note: '第一次建仓',
+          },
+          {
+            id: 'cash-dividend-1',
+            type: 'cash_dividend',
+            tradeDate: '2026-03-03',
+            amount: 20,
+            note: '季度分红',
+          },
+        ],
+      },
+    ];
+
+    const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
+    render(page);
+
+    expect(screen.getByText(/2026-03-01 · 金额 1000/)).toBeTruthy();
+    expect(screen.getByText(/净值 1.0234 · 手续费 1.50/)).toBeTruthy();
+    expect(screen.getByText(/备注：第一次建仓/)).toBeTruthy();
+
+    expect(screen.getByText(/2026-03-03 · 金额 20/)).toBeTruthy();
+    expect(screen.getByText(/备注：季度分红/)).toBeTruthy();
   });
 
   it('shows fallback text when no position exists', async () => {

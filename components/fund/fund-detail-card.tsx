@@ -16,6 +16,19 @@ function formatNumber(value: number | null | undefined) {
   return typeof value === 'number' ? value.toFixed(2) : '待填写';
 }
 
+function formatAverageCost(value: number | null | undefined) {
+  return typeof value === 'number' ? value.toFixed(4) : '待填写';
+}
+
+function SummaryItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl bg-slate-50 p-4">
+      <p className="text-sm text-slate-500">{label}</p>
+      <p className="mt-2 text-2xl font-semibold text-slate-900">{value}</p>
+    </div>
+  );
+}
+
 export function FundDetailCard({ fund, quote }: FundDetailCardProps) {
   const ledgerSummary = fund.transactions?.length
     ? calculateTransactionLedgerSummary(fund.transactions, quote?.estimatedNav)
@@ -28,6 +41,33 @@ export function FundDetailCard({ fund, quote }: FundDetailCardProps) {
   });
   const currentCost = ledgerSummary ? ledgerSummary.currentCost : fund.position?.cost;
   const estimatedProfit = ledgerSummary ? ledgerSummary.unrealizedProfit : summary.isComputable ? summary.profit : null;
+  const totalProfit = ledgerSummary
+    ? ledgerSummary.realizedProfit + ledgerSummary.unrealizedProfit
+    : estimatedProfit;
+  const summaryItems = ledgerSummary
+    ? [
+        { label: '当前估值', value: formatNumber(quote?.estimatedNav) },
+        {
+          label: '涨跌幅',
+          value: typeof quote?.changeRate === 'number' ? `${quote.changeRate.toFixed(2)}%` : '待填写',
+        },
+        { label: '当前份额', value: formatNumber(ledgerSummary.currentShares) },
+        { label: '当前成本', value: formatNumber(ledgerSummary.currentCost) },
+        { label: '平均成本', value: formatAverageCost(ledgerSummary.averageCost) },
+        { label: '未实现收益', value: formatNumber(ledgerSummary.unrealizedProfit) },
+        { label: '已实现收益', value: formatNumber(ledgerSummary.realizedProfit) },
+        { label: '累计分红', value: formatNumber(ledgerSummary.totalDividends) },
+        { label: '总收益', value: formatNumber(totalProfit) },
+      ]
+    : [
+        { label: '当前估值', value: formatNumber(quote?.estimatedNav) },
+        {
+          label: '涨跌幅',
+          value: typeof quote?.changeRate === 'number' ? `${quote.changeRate.toFixed(2)}%` : '待填写',
+        },
+        { label: '持仓成本', value: formatNumber(currentCost) },
+        { label: '估算盈亏', value: formatNumber(estimatedProfit) },
+      ];
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -42,26 +82,9 @@ export function FundDetailCard({ fund, quote }: FundDetailCardProps) {
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-2">
-        <div className="rounded-xl bg-slate-50 p-4">
-          <p className="text-sm text-slate-500">当前估值</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-900">{formatNumber(quote?.estimatedNav)}</p>
-        </div>
-        <div className="rounded-xl bg-slate-50 p-4">
-          <p className="text-sm text-slate-500">涨跌幅</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-900">
-            {typeof quote?.changeRate === 'number' ? `${quote.changeRate.toFixed(2)}%` : '待填写'}
-          </p>
-        </div>
-        <div className="rounded-xl bg-slate-50 p-4">
-          <p className="text-sm text-slate-500">持仓成本</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-900">{formatNumber(currentCost)}</p>
-        </div>
-        <div className="rounded-xl bg-slate-50 p-4">
-          <p className="text-sm text-slate-500">估算盈亏</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-900">
-            {formatNumber(estimatedProfit)}
-          </p>
-        </div>
+        {summaryItems.map((item) => (
+          <SummaryItem key={item.label} label={item.label} value={item.value} />
+        ))}
       </div>
     </section>
   );
