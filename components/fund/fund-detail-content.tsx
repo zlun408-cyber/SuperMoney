@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import { AddTransactionDialog } from '@/components/fund/add-transaction-dialog';
 import { FundDetailCard } from '@/components/fund/fund-detail-card';
 import { TransactionList } from '@/components/fund/transaction-list';
+import { calculateTransactionLedgerSummary } from '@/lib/funds/transactions';
 import { useFundQuotes } from '@/lib/hooks/use-fund-quotes';
 import type { FundTransaction } from '@/lib/funds/types';
 import { useWatchlist } from '@/lib/hooks/use-watchlist';
@@ -33,6 +34,26 @@ export function FundDetailContent({ code }: FundDetailContentProps) {
   const transactions = fund.transactions ?? [];
   const addTransactionHandler = (transaction: FundTransaction) => addTransaction(code, transaction);
   const cancelEditHandler = () => setEditingTransaction(null);
+  const validateTransactionBusinessRules = (transaction: FundTransaction) => {
+    if (transaction.type !== 'sell') {
+      return null;
+    }
+
+    const comparableTransactions = editingTransaction
+      ? transactions.filter((currentTransaction) => currentTransaction.id !== editingTransaction.id)
+      : transactions;
+
+    try {
+      calculateTransactionLedgerSummary([...comparableTransactions, transaction]);
+      return null;
+    } catch (error) {
+      if (error instanceof Error && error.message === '卖出份额不能大于当前可用份额') {
+        return error.message;
+      }
+
+      throw error;
+    }
+  };
   const dialogProps = editingTransaction
     ? {
         editingTransaction,
@@ -49,7 +70,11 @@ export function FundDetailContent({ code }: FundDetailContentProps) {
   return (
     <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 px-6 py-12">
       <FundDetailCard fund={fund} quote={quote} />
-      <AddTransactionDialog onAddTransaction={addTransactionHandler} {...dialogProps} />
+      <AddTransactionDialog
+        onAddTransaction={addTransactionHandler}
+        validateBusinessRules={validateTransactionBusinessRules}
+        {...dialogProps}
+      />
       <TransactionList
         transactions={transactions}
         onDeleteTransaction={(transaction) => {

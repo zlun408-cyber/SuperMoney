@@ -40,7 +40,18 @@ vi.mock('@/lib/hooks/use-watchlist', () => ({
       addFund: vi.fn(),
       removeFund: vi.fn(),
       updatePosition: vi.fn(),
-      addTransaction: vi.fn(),
+      addTransaction: (code: string, transaction: FundTransaction) => {
+        setWatchlist((current) =>
+          current.map((item) =>
+            item.code === code
+              ? {
+                  ...item,
+                  transactions: [...(item.transactions ?? []), transaction],
+                }
+              : item,
+          ),
+        );
+      },
       updateTransaction: (code: string, transactionId: string, transaction: FundTransaction) => {
         setWatchlist((current) =>
           current.map((item) =>
@@ -280,5 +291,148 @@ describe('FundDetailPage', () => {
     expect(confirmMock).toHaveBeenCalledWith('确认删除这条交易记录吗？删除后会自动重算持仓和收益。');
     expect(screen.getByText('还没有交易记录，请先添加第一笔记录。')).toBeTruthy();
     expect(screen.queryByRole('heading', { name: '编辑交易记录' })).toBeNull();
+  });
+
+  it('blocks adding an oversold transaction, then saves successfully after correcting shares', async () => {
+    const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
+
+    render(page);
+
+    fireEvent.click(screen.getByRole('button', { name: '添加交易记录' }));
+    fireEvent.change(screen.getByLabelText('记录类型'), {
+      target: { value: 'sell' },
+    });
+    fireEvent.change(screen.getByLabelText('交易日期'), {
+      target: { value: '2026-03-02' },
+    });
+    fireEvent.change(screen.getByLabelText('份额'), {
+      target: { value: '1200' },
+    });
+    fireEvent.change(screen.getByLabelText('净值'), {
+      target: { value: '1.1' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '保存记录' }));
+
+    expect(screen.getByText('卖出份额不能大于当前可用份额')).toBeTruthy();
+    expect(screen.queryByText(/2026-03-02 · 份额 1200/)).toBeNull();
+
+    fireEvent.change(screen.getByLabelText('份额'), {
+      target: { value: '500' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存记录' }));
+
+    expect(screen.queryByText('卖出份额不能大于当前可用份额')).toBeNull();
+    expect(screen.getByText(/2026-03-02 · 份额 500/)).toBeTruthy();
+  });
+
+  it('blocks adding a sell transaction dated before the first buy', async () => {
+    mockWatchlist = [
+      {
+        code: '161725',
+        name: '招商中证白酒指数',
+        transactions: [
+          {
+            id: 'buy-1',
+            type: 'buy',
+            tradeDate: '2026-03-10',
+            amount: 1000,
+            nav: 1,
+          },
+        ],
+      },
+    ];
+
+    const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
+
+    render(page);
+
+    fireEvent.click(screen.getByRole('button', { name: '添加交易记录' }));
+    fireEvent.change(screen.getByLabelText('记录类型'), {
+      target: { value: 'sell' },
+    });
+    fireEvent.change(screen.getByLabelText('交易日期'), {
+      target: { value: '2026-03-01' },
+    });
+    fireEvent.change(screen.getByLabelText('份额'), {
+      target: { value: '500' },
+    });
+    fireEvent.change(screen.getByLabelText('净值'), {
+      target: { value: '1.1' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '保存记录' }));
+
+    expect(screen.getByText('卖出份额不能大于当前可用份额')).toBeTruthy();
+    expect(screen.queryByText(/2026-03-01 · 份额 500/)).toBeNull();
+    expect(screen.getByText(/2026-03-10 · 金额 1000/)).toBeTruthy();
+  });
+
+  it('clears the business error when resetting the add form', async () => {
+    const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
+
+    render(page);
+
+    fireEvent.click(screen.getByRole('button', { name: '添加交易记录' }));
+    fireEvent.change(screen.getByLabelText('记录类型'), {
+      target: { value: 'sell' },
+    });
+    fireEvent.change(screen.getByLabelText('交易日期'), {
+      target: { value: '2026-03-02' },
+    });
+    fireEvent.change(screen.getByLabelText('份额'), {
+      target: { value: '1200' },
+    });
+    fireEvent.change(screen.getByLabelText('净值'), {
+      target: { value: '1.1' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '保存记录' }));
+
+    expect(screen.getByText('卖出份额不能大于当前可用份额')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '添加交易记录' }));
+
+    expect(screen.queryByText('卖出份额不能大于当前可用份额')).toBeNull();
+  });
+
+  it('validates edited sell transactions against remaining transactions only', async () => {
+    mockWatchlist = [
+      {
+        code: '161725',
+        name: '招商中证白酒指数',
+        transactions: [
+          {
+            id: 'buy-1',
+            type: 'buy',
+            tradeDate: '2026-03-01',
+            amount: 1000,
+            nav: 1,
+          },
+          {
+            id: 'sell-1',
+            type: 'sell',
+            tradeDate: '2026-03-02',
+            shares: 200,
+            nav: 1.1,
+          },
+        ],
+      },
+    ];
+
+    const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
+
+    render(page);
+
+    fireEvent.click(screen.getByRole('button', { name: '编辑 2026-03-02 卖出记录' }));
+    fireEvent.change(screen.getByLabelText('份额'), {
+      target: { value: '900' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+
+    expect(screen.queryByText('卖出份额不能大于当前可用份额')).toBeNull();
+    expect(screen.getByText(/2026-03-02 · 份额 900/)).toBeTruthy();
+    expect(screen.queryByText(/2026-03-02 · 份额 200/)).toBeNull();
   });
 });

@@ -26,15 +26,16 @@
 - 已完成：首页优先显示交易记录推导汇总
 - 已完成：交易流水端到端主流程验证
 - 已完成：交易记录编辑 / 删除 UI
+- 已完成：交易记录字段错误提示与卖出超额业务提示
 - 已完成：当前代码通过 `npm run test`
 - 已完成：当前代码通过 `npm run test:e2e`
 - 已完成：当前代码通过 `npm run build`
-- 未开始：更细的错误提示、登录升级
+- 未开始：更细的交互 polish、登录升级
 
 ## 当前主线
 - 当前正在推进：第二阶段“交易明细驱动的持仓与收益系统”增强收尾
-- 当前完成到：交易记录新增、编辑、删除，以及首页/详情页自动汇总
-- 下一步：决定是继续补更细的错误提示与交互 polish，还是整理本轮增强提交
+- 当前完成到：交易记录新增、编辑、删除、字段错误提示、卖出超额提示，以及首页/详情页自动汇总
+- 下一步：决定是继续补更细的交互 polish，还是整理本轮增强提交
 
 ## 关键决策
 - 项目目录名：`SuperFinance`
@@ -46,13 +47,14 @@
 - 首页与详情页在有交易记录时，优先使用交易记录推导结果
 - 交易记录编辑复用现有弹层，不新增独立编辑页面
 - 交易记录删除先使用浏览器确认框，保持实现简单稳定
+- 错误提示采用“字段级 + 业务级”双层方式，但只在点击保存时触发
 - 推荐技术方向：Next.js + TypeScript + Tailwind CSS + localStorage
 - 当前主分支：`master`
 - 当前开发目录：项目主目录 `/Users/zhanglun/Desktop/SuperFinance`
 
 ## 阻塞问题
 - 暂无硬阻塞
-- 下一步需要决定第二阶段增强是否继续补更细的错误提示或表单校验反馈
+- 下一步需要决定第二阶段增强是否继续补更细的交互 polish 或表单体验优化
 
 ## 重要文件
 - `PROJECT_STATUS.md`：项目当前状态
@@ -65,3 +67,5 @@
 - `docs/superpowers/plans/2026-03-26-trade-ledger-phase2.md`：第二阶段实现计划
 - `docs/superpowers/specs/2026-03-27-transaction-record-edit-delete-design.md`：交易记录编辑/删除设计文档
 - `docs/superpowers/plans/2026-03-27-transaction-record-edit-delete.md`：交易记录编辑/删除实现计划
+- `docs/superpowers/specs/2026-03-27-transaction-validation-feedback-design.md`：交易记录错误提示设计文档
+- `docs/superpowers/plans/2026-03-27-transaction-validation-feedback.md`：交易记录错误提示实现计划
