@@ -244,6 +244,61 @@ describe('FundDetailPage', () => {
     expectSummaryCardValue('总收益', '460.00');
   });
 
+  it('shows ledger explanation text when transaction summary is displayed', async () => {
+    mockWatchlist = [
+      {
+        code: '161725',
+        name: '招商中证白酒指数',
+        transactions: [
+          {
+            id: 'buy-1',
+            type: 'buy',
+            tradeDate: '2026-03-01',
+            amount: 1000,
+            nav: 1,
+          },
+          {
+            id: 'cash-dividend-1',
+            type: 'cash_dividend',
+            tradeDate: '2026-03-03',
+            amount: 20,
+          },
+        ],
+      },
+    ];
+
+    const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
+    render(page);
+
+    expect(screen.getByText('账本说明')).toBeTruthy();
+    expect(screen.getByText('总收益 = 已实现收益 + 未实现收益')).toBeTruthy();
+    expect(screen.getByText('累计分红已计入已实现收益，这里单独展示，方便你看清收益来源。')).toBeTruthy();
+  });
+
+  it('groups ledger summary into holding and profit sections', async () => {
+    mockWatchlist = [
+      {
+        code: '161725',
+        name: '招商中证白酒指数',
+        transactions: [
+          {
+            id: 'buy-1',
+            type: 'buy',
+            tradeDate: '2026-03-01',
+            amount: 1000,
+            nav: 1,
+          },
+        ],
+      },
+    ];
+
+    const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
+    render(page);
+
+    expect(screen.getByText('持仓概览')).toBeTruthy();
+    expect(screen.getByText('收益拆分')).toBeTruthy();
+  });
+
   it('shows richer transaction row details for reconciliation', async () => {
     mockWatchlist = [
       {
