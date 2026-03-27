@@ -2,6 +2,8 @@
 
 import React, { useMemo, useState } from 'react';
 
+import { useAuthSession } from '@/lib/auth/auth-context';
+import { SyncConflictDialog } from '@/components/auth/sync-conflict-dialog';
 import { StatusBanner } from '@/components/shared/status-banner';
 import { AddFundDialog } from '@/components/watchlist/add-fund-dialog';
 import { EditPositionDialog } from '@/components/watchlist/edit-position-dialog';
@@ -11,8 +13,17 @@ import { useWatchlist } from '@/lib/hooks/use-watchlist';
 import type { WatchlistFund } from '@/lib/storage/watchlist-storage';
 
 export default function HomePage() {
-  const { watchlist, addFund, removeFund, updatePosition } = useWatchlist();
+  const { userId, isAuthenticated, cloudClient } = useAuthSession();
   const [editingFund, setEditingFund] = useState<WatchlistFund | null>(null);
+  const [syncConflictActions, setSyncConflictActions] = useState<{
+    useCloud: () => void;
+    useLocal: () => void;
+  } | null>(null);
+  const { watchlist, addFund, removeFund, updatePosition } = useWatchlist({
+    userId,
+    cloudClient,
+    onSyncConflict: setSyncConflictActions,
+  });
   const { quotes, error, isRefreshing, lastUpdatedAt, refresh } = useFundQuotes(
     watchlist.map((fund) => fund.code),
   );
@@ -38,9 +49,32 @@ export default function HomePage() {
         </div>
       </header>
 
+      {!isAuthenticated ? (
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          登录后可同步自选基金和交易记录，换设备也能继续使用。
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          已登录账号请使用交易记录维护持仓与收益，手工持仓编辑已停用。
+        </div>
+      )}
+
+      <SyncConflictDialog
+        open={syncConflictActions !== null}
+        onChooseCloud={() => {
+          syncConflictActions?.useCloud();
+          setSyncConflictActions(null);
+        }}
+        onChooseLocal={() => {
+          syncConflictActions?.useLocal();
+          setSyncConflictActions(null);
+        }}
+      />
+
       <StatusBanner error={error ? '本次刷新失败，当前显示的是上次数据' : null} isRefreshing={isRefreshing} lastUpdatedAt={lastUpdatedAt} />
 
       <WatchlistTable
+        disablePositionEditing={isAuthenticated}
         funds={watchlist}
         quotesByCode={quotesByCode}
         onEditPosition={setEditingFund}

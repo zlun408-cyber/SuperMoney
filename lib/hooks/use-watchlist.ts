@@ -3,6 +3,11 @@
 import { useEffect, useState } from 'react';
 
 import type { FundTransaction, PositionInput } from '@/lib/funds/types';
+import {
+  loadCloudWatchlist,
+  saveCloudWatchlist,
+  type CloudWatchlistClient,
+} from '@/lib/sync/cloud-watchlist';
 import { loadWatchlist, saveWatchlist, type WatchlistFund } from '@/lib/storage/watchlist-storage';
 
 interface AddFundInput {
@@ -10,17 +15,84 @@ interface AddFundInput {
   name: string;
 }
 
-export function useWatchlist() {
+interface UseWatchlistOptions {
+  userId?: string | null;
+  cloudClient?: CloudWatchlistClient | null;
+  onSyncConflict?: ((actions: { useCloud: () => void; useLocal: () => void }) => void) | null;
+}
+
+export function useWatchlist(options: UseWatchlistOptions = {}) {
+  const { userId = null, cloudClient = null, onSyncConflict = null } = options;
   const [watchlist, setWatchlist] = useState<WatchlistFund[]>([]);
+  const isAuthenticated = Boolean(userId && cloudClient);
 
   useEffect(() => {
-    setWatchlist(loadWatchlist());
-  }, []);
+    let cancelled = false;
+
+    async function loadInitialWatchlist() {
+      if (isAuthenticated && userId && cloudClient) {
+        const cloudWatchlist = await loadCloudWatchlist(cloudClient, userId);
+        const localWatchlist = loadWatchlist();
+        const hasLocalData = localWatchlist.length > 0;
+        const hasCloudData = cloudWatchlist.length > 0;
+
+        if (hasLocalData && hasCloudData && onSyncConflict) {
+          onSyncConflict({
+            useCloud: () => {
+              if (!cancelled) {
+                setWatchlist(cloudWatchlist);
+              }
+            },
+            useLocal: () => {
+              if (!cancelled) {
+                setWatchlist(localWatchlist);
+              }
+
+              void saveCloudWatchlist(cloudClient, userId, localWatchlist);
+            },
+          });
+
+          return;
+        }
+
+        if (hasLocalData && !hasCloudData) {
+          if (!cancelled) {
+            setWatchlist(localWatchlist);
+          }
+
+          void saveCloudWatchlist(cloudClient, userId, localWatchlist);
+          return;
+        }
+
+        if (!cancelled) {
+          setWatchlist(cloudWatchlist);
+        }
+
+        return;
+      }
+
+      if (!cancelled) {
+        setWatchlist(loadWatchlist());
+      }
+    }
+
+    void loadInitialWatchlist();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cloudClient, isAuthenticated, onSyncConflict, userId]);
 
   const updateWatchlist = (updater: (current: WatchlistFund[]) => WatchlistFund[]) => {
     setWatchlist((current) => {
       const nextWatchlist = updater(current);
-      saveWatchlist(nextWatchlist);
+
+      if (isAuthenticated && userId && cloudClient) {
+        void saveCloudWatchlist(cloudClient, userId, nextWatchlist);
+      } else {
+        saveWatchlist(nextWatchlist);
+      }
+
       return nextWatchlist;
     });
   };
@@ -97,6 +169,7 @@ export function useWatchlist() {
 
   return {
     watchlist,
+    isAuthenticated,
     addFund,
     removeFund,
     updatePosition,

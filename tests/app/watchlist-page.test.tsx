@@ -62,6 +62,8 @@ let mockQuotes = [
 ];
 
 let mockError: string | null = 'network failed';
+let mockIsAuthenticated = false;
+let mockUserId: string | null = null;
 
 vi.mock('@/lib/hooks/use-watchlist', () => ({
   useWatchlist: () => ({
@@ -69,6 +71,15 @@ vi.mock('@/lib/hooks/use-watchlist', () => ({
     addFund: vi.fn(),
     removeFund: vi.fn(),
     updatePosition: vi.fn(),
+    isAuthenticated: mockIsAuthenticated,
+  }),
+}));
+
+vi.mock('@/lib/auth/auth-context', () => ({
+  useAuthSession: () => ({
+    userId: mockUserId,
+    isAuthenticated: mockIsAuthenticated,
+    cloudClient: mockIsAuthenticated ? {} : null,
   }),
 }));
 
@@ -140,6 +151,8 @@ afterEach(() => {
     },
   ];
   mockError = 'network failed';
+  mockIsAuthenticated = false;
+  mockUserId = null;
 });
 
 describe('HomePage', () => {
@@ -179,5 +192,34 @@ describe('HomePage', () => {
     render(<HomePage />);
 
     expect(screen.getByText('还没有添加基金，请先添加一只基金开始监控。')).toBeTruthy();
+  });
+
+  it('shows login sync hint when the user is not authenticated', () => {
+    render(<HomePage />);
+
+    expect(screen.getByText('登录后可同步自选基金和交易记录，换设备也能继续使用。')).toBeTruthy();
+  });
+
+  it('hides login sync hint when the user is authenticated', () => {
+    mockIsAuthenticated = true;
+    mockUserId = 'user-1';
+
+    render(<HomePage />);
+
+    expect(screen.queryByText('登录后可同步自选基金和交易记录，换设备也能继续使用。')).toBeNull();
+  });
+
+  it('disables manual position editing after login and shows ledger guidance', () => {
+    mockIsAuthenticated = true;
+    mockUserId = 'user-1';
+
+    render(<HomePage />);
+
+    expect(screen.getByText('已登录账号请使用交易记录维护持仓与收益，手工持仓编辑已停用。')).toBeTruthy();
+
+    const editButtons = screen.getAllByRole('button', { name: '编辑持仓' });
+
+    expect(editButtons.length).toBeGreaterThan(0);
+    expect(editButtons.every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
   });
 });

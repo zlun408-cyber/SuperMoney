@@ -1,8 +1,9 @@
-import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useWatchlist } from '@/lib/hooks/use-watchlist';
 import { WATCHLIST_STORAGE_KEY } from '@/lib/storage/watchlist-storage';
+import type { CloudWatchlistClient } from '@/lib/sync/cloud-watchlist';
 
 const sampleFund = {
   code: '161725',
@@ -120,5 +121,247 @@ describe('useWatchlist', () => {
     });
 
     expect(result.current.watchlist[0]?.transactions ?? []).toHaveLength(0);
+  });
+
+  it('loads the initial watchlist from cloud when user is authenticated', async () => {
+    const cloudClient: CloudWatchlistClient = {
+      listFunds: vi.fn().mockResolvedValue([
+        {
+          id: 'fund-1',
+          userId: 'user-1',
+          code: '161725',
+          name: '招商中证白酒指数',
+          createdAt: '2026-03-27T10:00:00.000Z',
+        },
+      ]),
+      listTransactions: vi.fn().mockResolvedValue([
+        {
+          id: 'tx-1',
+          userId: 'user-1',
+          fundId: 'fund-1',
+          type: 'buy',
+          tradeDate: '2026-03-20',
+          amount: 1000,
+          nav: 1,
+          createdAt: '2026-03-20T10:00:00.000Z',
+          updatedAt: '2026-03-20T10:00:00.000Z',
+        },
+      ]),
+      replaceFunds: vi.fn().mockResolvedValue([]),
+      replaceTransactions: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const { result } = renderHook(() =>
+      useWatchlist({
+        userId: 'user-1',
+        cloudClient,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.watchlist).toEqual([
+        {
+          code: '161725',
+          name: '招商中证白酒指数',
+          transactions: [
+            {
+              id: 'tx-1',
+              type: 'buy',
+              tradeDate: '2026-03-20',
+              amount: 1000,
+              nav: 1,
+            },
+          ],
+        },
+      ]);
+    });
+
+    expect(window.localStorage.getItem(WATCHLIST_STORAGE_KEY)).toBeNull();
+  });
+
+  it('saves watchlist changes to cloud when user is authenticated', async () => {
+    const cloudClient: CloudWatchlistClient = {
+      listFunds: vi.fn().mockResolvedValue([]),
+      listTransactions: vi.fn().mockResolvedValue([]),
+      replaceFunds: vi.fn().mockResolvedValue([
+        {
+          id: 'fund-1',
+          userId: 'user-1',
+          code: '161725',
+          name: '招商中证白酒指数',
+          createdAt: '2026-03-27T10:00:00.000Z',
+        },
+      ]),
+      replaceTransactions: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const { result } = renderHook(() =>
+      useWatchlist({
+        userId: 'user-1',
+        cloudClient,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(cloudClient.listFunds).toHaveBeenCalledWith('user-1');
+    });
+
+    act(() => {
+      result.current.addFund(sampleFund);
+    });
+
+    await waitFor(() => {
+      expect(cloudClient.replaceFunds).toHaveBeenLastCalledWith('user-1', [
+        {
+          code: '161725',
+          name: '招商中证白酒指数',
+        },
+      ]);
+    });
+
+    expect(window.localStorage.getItem(WATCHLIST_STORAGE_KEY)).toBeNull();
+  });
+
+  it('waits for user choice when local and cloud data both exist on first login', async () => {
+    window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify([{ code: '110011', name: '易方达中小盘' }]));
+
+    const onConflict = vi.fn();
+    const cloudClient: CloudWatchlistClient = {
+      listFunds: vi.fn().mockResolvedValue([
+        {
+          id: 'fund-1',
+          userId: 'user-1',
+          code: '161725',
+          name: '招商中证白酒指数',
+          createdAt: '2026-03-27T10:00:00.000Z',
+        },
+      ]),
+      listTransactions: vi.fn().mockResolvedValue([]),
+      replaceFunds: vi.fn().mockResolvedValue([]),
+      replaceTransactions: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const { result } = renderHook(() =>
+      useWatchlist({
+        userId: 'user-1',
+        cloudClient,
+        onSyncConflict: onConflict,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(onConflict).toHaveBeenCalledTimes(1);
+    });
+
+    expect(result.current.watchlist).toEqual([]);
+    expect(cloudClient.replaceFunds).not.toHaveBeenCalled();
+  });
+
+  it('uses cloud data after conflict chooser selects cloud', async () => {
+    window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify([{ code: '110011', name: '易方达中小盘' }]));
+
+    const cloudClient: CloudWatchlistClient = {
+      listFunds: vi.fn().mockResolvedValue([
+        {
+          id: 'fund-1',
+          userId: 'user-1',
+          code: '161725',
+          name: '招商中证白酒指数',
+          createdAt: '2026-03-27T10:00:00.000Z',
+        },
+      ]),
+      listTransactions: vi.fn().mockResolvedValue([]),
+      replaceFunds: vi.fn().mockResolvedValue([]),
+      replaceTransactions: vi.fn().mockResolvedValue(undefined),
+    };
+
+    let chooseCloud: (() => void) | undefined;
+    let chooseLocal: (() => void) | undefined;
+
+    const { result } = renderHook(() =>
+      useWatchlist({
+        userId: 'user-1',
+        cloudClient,
+        onSyncConflict: (actions) => {
+          chooseCloud = actions.useCloud;
+          chooseLocal = actions.useLocal;
+        },
+      }),
+    );
+
+    await waitFor(() => {
+      expect(chooseCloud).toBeTypeOf('function');
+      expect(chooseLocal).toBeTypeOf('function');
+    });
+
+    act(() => {
+      chooseCloud?.();
+    });
+
+    await waitFor(() => {
+      expect(result.current.watchlist).toEqual([
+        {
+          code: '161725',
+          name: '招商中证白酒指数',
+          transactions: [],
+        },
+      ]);
+    });
+
+    expect(cloudClient.replaceFunds).not.toHaveBeenCalled();
+  });
+
+  it('uses local data after conflict chooser selects local', async () => {
+    const localWatchlist = [{ code: '110011', name: '易方达中小盘' }];
+    window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(localWatchlist));
+
+    const cloudClient: CloudWatchlistClient = {
+      listFunds: vi.fn().mockResolvedValue([
+        {
+          id: 'fund-1',
+          userId: 'user-1',
+          code: '161725',
+          name: '招商中证白酒指数',
+          createdAt: '2026-03-27T10:00:00.000Z',
+        },
+      ]),
+      listTransactions: vi.fn().mockResolvedValue([]),
+      replaceFunds: vi.fn().mockResolvedValue([
+        {
+          id: 'fund-local-1',
+          userId: 'user-1',
+          code: '110011',
+          name: '易方达中小盘',
+          createdAt: '2026-03-27T10:00:00.000Z',
+        },
+      ]),
+      replaceTransactions: vi.fn().mockResolvedValue(undefined),
+    };
+
+    let chooseLocal: (() => void) | undefined;
+
+    const { result } = renderHook(() =>
+      useWatchlist({
+        userId: 'user-1',
+        cloudClient,
+        onSyncConflict: (actions) => {
+          chooseLocal = actions.useLocal;
+        },
+      }),
+    );
+
+    await waitFor(() => {
+      expect(chooseLocal).toBeTypeOf('function');
+    });
+
+    act(() => {
+      chooseLocal?.();
+    });
+
+    await waitFor(() => {
+      expect(result.current.watchlist).toEqual(localWatchlist);
+    });
+
+    expect(cloudClient.replaceFunds).toHaveBeenCalledWith('user-1', localWatchlist);
   });
 });

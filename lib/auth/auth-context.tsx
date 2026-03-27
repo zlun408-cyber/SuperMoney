@@ -1,0 +1,136 @@
+'use client';
+
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+
+import type { AuthCredentials, AuthSessionValue, SupabaseAuthClientLike, SupabaseSessionLike } from '@/lib/auth/types';
+import { createSupabaseCloudWatchlistClient } from '@/lib/sync/cloud-watchlist';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+
+const AuthSessionContext = createContext<AuthSessionValue | null>(null);
+
+interface AuthProviderProps {
+  children: ReactNode;
+  authClient?: SupabaseAuthClientLike | null;
+}
+
+interface SessionState {
+  isReady: boolean;
+  session: SupabaseSessionLike | null;
+}
+
+export function AuthProvider({ children, authClient }: AuthProviderProps) {
+  const browserClient = createSupabaseBrowserClient();
+  const authApi = authClient ?? (browserClient ? browserClient.auth : null);
+  const [sessionState, setSessionState] = useState<SessionState>({
+    isReady: authApi === null,
+    session: null,
+  });
+
+  useEffect(() => {
+    if (!authApi) {
+      setSessionState({
+        isReady: true,
+        session: null,
+      });
+      return;
+    }
+
+    const activeClient = authApi;
+
+    let cancelled = false;
+
+    async function loadSession() {
+      const { data, error } = await activeClient.getSession();
+
+      if (cancelled || error) {
+        if (!cancelled) {
+          setSessionState({
+            isReady: true,
+            session: null,
+          });
+        }
+        return;
+      }
+
+      setSessionState({
+        isReady: true,
+        session: data.session,
+      });
+    }
+
+    void loadSession();
+
+    const { data } = activeClient.onAuthStateChange((_event, session) => {
+      if (!cancelled) {
+        setSessionState({
+          isReady: true,
+          session,
+        });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      data.subscription.unsubscribe();
+    };
+  }, [authApi]);
+
+  const value = useMemo<AuthSessionValue>(() => {
+    const session = sessionState.session;
+    const user = session?.user ?? null;
+    const isAuthenticated = Boolean(user?.id);
+
+    return {
+      isReady: sessionState.isReady,
+      isAuthenticated,
+      userId: user?.id ?? null,
+      userEmail: user?.email ?? null,
+      cloudClient: browserClient ? createSupabaseCloudWatchlistClient(browserClient) : null,
+      login: async (credentials: AuthCredentials) => {
+        if (!authApi) {
+          throw new Error('Supabase 未配置，无法登录');
+        }
+
+        const { error } = await authApi.signInWithPassword(credentials);
+
+        if (error) {
+          throw error;
+        }
+      },
+      register: async (credentials: AuthCredentials) => {
+        if (!authApi) {
+          throw new Error('Supabase 未配置，无法注册');
+        }
+
+        const { error } = await authApi.signUp(credentials);
+
+        if (error) {
+          throw error;
+        }
+      },
+      logout: async () => {
+        if (!authApi) {
+          return;
+        }
+
+        const { error } = await authApi.signOut();
+
+        if (error) {
+          throw error;
+        }
+      },
+    };
+  }, [authApi, browserClient, sessionState.isReady, sessionState.session]);
+
+  return <AuthSessionContext.Provider value={value}>{children}</AuthSessionContext.Provider>;
+}
+
+export function useAuthSession(): AuthSessionValue {
+  const context = useContext(AuthSessionContext);
+
+  if (!context) {
+    throw new Error('useAuthSession 必须在 AuthProvider 内使用');
+  }
+
+  return context;
+}

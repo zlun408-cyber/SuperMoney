@@ -11,6 +11,7 @@ interface WatchlistTableProps {
   quotesByCode: Record<string, FundQuote>;
   onEditPosition: (fund: WatchlistFund) => void;
   onRemoveFund: (code: string) => void;
+  disablePositionEditing?: boolean;
 }
 
 function formatPercent(value: number | undefined) {
@@ -21,7 +22,13 @@ function formatNumber(value: number | null | undefined) {
   return typeof value === 'number' ? value.toFixed(2) : '--';
 }
 
-export function WatchlistTable({ funds, quotesByCode, onEditPosition, onRemoveFund }: WatchlistTableProps) {
+export function WatchlistTable({
+  funds,
+  quotesByCode,
+  onEditPosition,
+  onRemoveFund,
+  disablePositionEditing = false,
+}: WatchlistTableProps) {
   if (funds.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-slate-500">
@@ -81,7 +88,11 @@ export function WatchlistTable({ funds, quotesByCode, onEditPosition, onRemoveFu
                 <td className="px-4 py-3 text-slate-900">{profitText}</td>
                 <td className="px-4 py-3">
                   <div className="flex gap-2">
-                    <button className="rounded-lg border border-slate-300 px-3 py-1.5" onClick={() => onEditPosition(fund)}>
+                    <button
+                      className="rounded-lg border border-slate-300 px-3 py-1.5 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                      disabled={disablePositionEditing}
+                      onClick={() => onEditPosition(fund)}
+                    >
                       编辑持仓
                     </button>
                     <button className="rounded-lg border border-rose-200 px-3 py-1.5 text-rose-600" onClick={() => onRemoveFund(fund.code)}>
