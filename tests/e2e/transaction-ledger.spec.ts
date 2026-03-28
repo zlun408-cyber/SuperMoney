@@ -9,6 +9,10 @@ function summaryValueLocator(page: Parameters<typeof test>[0]['page'], label: st
     .nth(1);
 }
 
+function transactionRow(page: Parameters<typeof test>[0]['page'], rowText: string | RegExp) {
+  return page.locator('li').filter({ hasText: rowText });
+}
+
 test('can add buy and sell transactions, then see derived summaries on detail and homepage', async ({ page }) => {
   await page.route('**/api/funds/search?**', async (route) => {
     await route.fulfill({
@@ -62,8 +66,9 @@ test('can add buy and sell transactions, then see derived summaries on detail an
   await page.getByLabel('净值').fill('1');
   await page.getByRole('button', { name: '保存记录' }).click();
 
-  await expect(page.getByText('买入', { exact: true })).toBeVisible();
-  await expect(page.getByText(/2026-03-20 · 金额 1000/)).toBeVisible();
+  const buyRow = transactionRow(page, /2026-03-20 · 金额 1000/);
+  await expect(buyRow).toBeVisible();
+  await expect(buyRow.locator('span', { hasText: '买入' })).toBeVisible();
 
   await page.getByRole('button', { name: '添加交易记录' }).click();
   await page.getByLabel('记录类型').selectOption('sell');
@@ -72,8 +77,9 @@ test('can add buy and sell transactions, then see derived summaries on detail an
   await page.getByLabel('净值').fill('1.2');
   await page.getByRole('button', { name: '保存记录' }).click();
 
-  await expect(page.getByText('卖出', { exact: true })).toBeVisible();
-  await expect(page.getByText(/2026-03-22 · 份额 200/)).toBeVisible();
+  const sellRow = transactionRow(page, /2026-03-22 · 份额 200/);
+  await expect(sellRow).toBeVisible();
+  await expect(sellRow.locator('span', { hasText: '卖出' })).toBeVisible();
   await expect(page.getByText('持仓概览')).toBeVisible();
   await expect(page.getByText('当前成本', { exact: true })).toBeVisible();
   await expect(summaryValueLocator(page, '当前成本')).toHaveText('800.00');

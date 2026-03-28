@@ -97,6 +97,7 @@ function getImpactHint(
 
 export function TransactionList({ transactions, onEditTransaction, onDeleteTransaction }: TransactionListProps) {
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+  const [filterType, setFilterType] = useState<'all' | 'buy' | 'sell' | 'dividend'>('all');
   const snapshots = calculateTransactionLedgerSnapshots(transactions);
   const snapshotByTransactionId = new Map(snapshots.map((snapshot) => [snapshot.transactionId, snapshot]));
   const previousSnapshotByTransactionId = new Map(
@@ -107,6 +108,19 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
 
     return sortOrder === 'asc' ? sortedTransactions : [...sortedTransactions].reverse();
   }, [sortOrder, transactions]);
+  const visibleTransactions = useMemo(() => {
+    if (filterType === 'all') {
+      return orderedTransactions;
+    }
+
+    if (filterType === 'dividend') {
+      return orderedTransactions.filter(
+        (transaction) => transaction.type === 'cash_dividend' || transaction.type === 'reinvest_dividend',
+      );
+    }
+
+    return orderedTransactions.filter((transaction) => transaction.type === filterType);
+  }, [filterType, orderedTransactions]);
 
   if (transactions.length === 0) {
     return (
@@ -120,31 +134,75 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h3 className="text-lg font-semibold text-slate-900">交易记录</h3>
-        <div className="inline-flex rounded-lg border border-slate-200 p-1">
-          <button
-            aria-pressed={sortOrder === 'desc'}
-            className={`rounded-md px-3 py-1.5 text-sm ${
-              sortOrder === 'desc' ? 'bg-slate-900 text-white' : 'text-slate-600'
-            }`}
-            onClick={() => setSortOrder('desc')}
-            type="button"
-          >
-            最新在前
-          </button>
-          <button
-            aria-pressed={sortOrder === 'asc'}
-            className={`rounded-md px-3 py-1.5 text-sm ${
-              sortOrder === 'asc' ? 'bg-slate-900 text-white' : 'text-slate-600'
-            }`}
-            onClick={() => setSortOrder('asc')}
-            type="button"
-          >
-            最早在前
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-slate-200 p-1">
+            <button
+              aria-pressed={sortOrder === 'desc'}
+              className={`rounded-md px-3 py-1.5 text-sm ${
+                sortOrder === 'desc' ? 'bg-slate-900 text-white' : 'text-slate-600'
+              }`}
+              onClick={() => setSortOrder('desc')}
+              type="button"
+            >
+              最新在前
+            </button>
+            <button
+              aria-pressed={sortOrder === 'asc'}
+              className={`rounded-md px-3 py-1.5 text-sm ${
+                sortOrder === 'asc' ? 'bg-slate-900 text-white' : 'text-slate-600'
+              }`}
+              onClick={() => setSortOrder('asc')}
+              type="button"
+            >
+              最早在前
+            </button>
+          </div>
+          <div className="inline-flex rounded-lg border border-slate-200 p-1">
+            <button
+              aria-pressed={filterType === 'all'}
+              className={`rounded-md px-3 py-1.5 text-sm ${
+                filterType === 'all' ? 'bg-slate-100 text-slate-900' : 'text-slate-600'
+              }`}
+              onClick={() => setFilterType('all')}
+              type="button"
+            >
+              全部
+            </button>
+            <button
+              aria-pressed={filterType === 'buy'}
+              className={`rounded-md px-3 py-1.5 text-sm ${
+                filterType === 'buy' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600'
+              }`}
+              onClick={() => setFilterType('buy')}
+              type="button"
+            >
+              买入
+            </button>
+            <button
+              aria-pressed={filterType === 'sell'}
+              className={`rounded-md px-3 py-1.5 text-sm ${
+                filterType === 'sell' ? 'bg-amber-50 text-amber-700' : 'text-slate-600'
+              }`}
+              onClick={() => setFilterType('sell')}
+              type="button"
+            >
+              卖出
+            </button>
+            <button
+              aria-pressed={filterType === 'dividend'}
+              className={`rounded-md px-3 py-1.5 text-sm ${
+                filterType === 'dividend' ? 'bg-sky-50 text-sky-700' : 'text-slate-600'
+              }`}
+              onClick={() => setFilterType('dividend')}
+              type="button"
+            >
+              只看分红
+            </button>
+          </div>
         </div>
       </div>
       <ul className="mt-4 divide-y divide-slate-100">
-        {orderedTransactions.map((transaction) => {
+        {visibleTransactions.map((transaction) => {
           const snapshot = snapshotByTransactionId.get(transaction.id);
           const previousSnapshot = previousSnapshotByTransactionId.get(transaction.id);
 

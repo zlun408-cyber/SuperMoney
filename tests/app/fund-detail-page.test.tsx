@@ -156,8 +156,9 @@ describe('FundDetailPage', () => {
     expect(screen.getByText('1.05')).toBeTruthy();
     expectSummaryCardValue('未实现收益', '50.00');
     expect(screen.getAllByText('交易记录').length).toBeGreaterThan(0);
-    expect(screen.getByText('买入')).toBeTruthy();
-    expect(screen.getByText(/2026-03-01/)).toBeTruthy();
+    const rows = getTransactionRows();
+    expect(within(rows[0]).getByText('买入')).toBeTruthy();
+    expect(within(rows[0]).getByText(/2026-03-01/)).toBeTruthy();
   });
 
 
@@ -490,6 +491,59 @@ describe('FundDetailPage', () => {
 
     expect(within(rows[0]).getByText('买入')).toBeTruthy();
     expect(within(rows[1]).getByText('卖出')).toBeTruthy();
+  });
+
+  it('can filter transaction list by dividend types', async () => {
+    mockWatchlist = [
+      {
+        code: '161725',
+        name: '招商中证白酒指数',
+        transactions: [
+          {
+            id: 'buy-1',
+            type: 'buy',
+            tradeDate: '2026-03-01',
+            amount: 1000,
+            nav: 1,
+          },
+          {
+            id: 'sell-1',
+            type: 'sell',
+            tradeDate: '2026-03-02',
+            shares: 200,
+            nav: 1.2,
+          },
+          {
+            id: 'cash-dividend-1',
+            type: 'cash_dividend',
+            tradeDate: '2026-03-03',
+            amount: 20,
+          },
+          {
+            id: 'reinvest-dividend-1',
+            type: 'reinvest_dividend',
+            tradeDate: '2026-03-04',
+            amount: 10,
+            nav: 1.25,
+          },
+        ],
+      },
+    ];
+
+    const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
+    render(page);
+
+    fireEvent.click(screen.getByRole('button', { name: '只看分红' }));
+
+    expect(screen.getByRole('button', { name: '只看分红' }).getAttribute('aria-pressed')).toBe('true');
+
+    const rows = getTransactionRows();
+
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]).getByText('红利再投资')).toBeTruthy();
+    expect(within(rows[1]).getByText('现金分红')).toBeTruthy();
+    expect(rows.some((row) => within(row).queryByText('买入'))).toBe(false);
+    expect(rows.some((row) => within(row).queryByText('卖出'))).toBe(false);
   });
 
   it('shows fallback text when no position exists', async () => {
