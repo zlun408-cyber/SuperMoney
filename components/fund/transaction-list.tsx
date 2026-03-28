@@ -254,7 +254,7 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
           </div>
         </div>
       </div>
-      <p className="mt-3 text-sm text-slate-500">{toolbarSummary}</p>
+      <p className="mt-3 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-sm text-slate-500">{toolbarSummary}</p>
       <div className="mt-4 space-y-4">
         {visibleTransactions.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">

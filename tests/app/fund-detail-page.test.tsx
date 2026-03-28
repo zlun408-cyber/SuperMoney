@@ -641,7 +641,9 @@ describe('FundDetailPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '只看分红' }));
 
-    expect(screen.getByText('当前显示：只看分红 · 最新在前 · 共 2 条')).toBeTruthy();
+    const toolbarSummary = screen.getByText('当前显示：只看分红 · 最新在前 · 共 2 条');
+    expect(toolbarSummary).toBeTruthy();
+    expect(toolbarSummary.className).toContain('rounded-full');
   });
 
   it('shows a filtered empty state when no transaction matches the selected type', async () => {
