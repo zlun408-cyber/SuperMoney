@@ -258,7 +258,7 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
               {group.tradeDate} · {group.transactions.length} 笔
             </p>
             <ul className="mt-2 divide-y divide-slate-100">
-              {group.transactions.map((transaction) => {
+              {group.transactions.map((transaction, index) => {
                 const snapshot = snapshotByTransactionId.get(transaction.id);
                 const previousSnapshot = previousSnapshotByTransactionId.get(transaction.id);
 
@@ -274,6 +274,9 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
                           {getTypeLabel(transaction.type)}
                         </span>
                       </p>
+                      {group.transactions.length > 1 ? (
+                        <p className="mt-1 text-xs font-medium text-slate-400">当日第 {index + 1} 笔</p>
+                      ) : null}
                       <p className="mt-1 text-sm text-slate-500">
                         {transaction.tradeDate} · {getValueText(transaction)}
                       </p>

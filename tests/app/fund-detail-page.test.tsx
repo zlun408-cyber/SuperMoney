@@ -585,6 +585,8 @@ describe('FundDetailPage', () => {
     const rows = getTransactionRows();
 
     expect(within(rows[0]).getByText('现金分红')).toBeTruthy();
+    expect(within(rows[1]).getByText('当日第 1 笔')).toBeTruthy();
+    expect(within(rows[2]).getByText('当日第 2 笔')).toBeTruthy();
     expect(within(rows[1]).getByText('卖出')).toBeTruthy();
     expect(within(rows[2]).getByText('买入')).toBeTruthy();
   });
