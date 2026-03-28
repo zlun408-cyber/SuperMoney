@@ -1,8 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 
-import { calculateTransactionLedgerSnapshots } from '@/lib/funds/transactions';
+import { calculateTransactionLedgerSnapshots, sortTransactionsByDate } from '@/lib/funds/transactions';
 import type { FundTransaction } from '@/lib/funds/types';
 
 interface TransactionListProps {
@@ -96,6 +96,18 @@ function getImpactHint(
 }
 
 export function TransactionList({ transactions, onEditTransaction, onDeleteTransaction }: TransactionListProps) {
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+  const snapshots = calculateTransactionLedgerSnapshots(transactions);
+  const snapshotByTransactionId = new Map(snapshots.map((snapshot) => [snapshot.transactionId, snapshot]));
+  const previousSnapshotByTransactionId = new Map(
+    snapshots.map((snapshot, index) => [snapshot.transactionId, index > 0 ? snapshots[index - 1] : undefined]),
+  );
+  const orderedTransactions = useMemo(() => {
+    const sortedTransactions = sortTransactionsByDate(transactions);
+
+    return sortOrder === 'asc' ? sortedTransactions : [...sortedTransactions].reverse();
+  }, [sortOrder, transactions]);
+
   if (transactions.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center text-slate-500">
@@ -104,17 +116,35 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
     );
   }
 
-  const snapshots = calculateTransactionLedgerSnapshots(transactions);
-  const snapshotByTransactionId = new Map(snapshots.map((snapshot) => [snapshot.transactionId, snapshot]));
-  const previousSnapshotByTransactionId = new Map(
-    snapshots.map((snapshot, index) => [snapshot.transactionId, index > 0 ? snapshots[index - 1] : undefined]),
-  );
-
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h3 className="text-lg font-semibold text-slate-900">交易记录</h3>
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <h3 className="text-lg font-semibold text-slate-900">交易记录</h3>
+        <div className="inline-flex rounded-lg border border-slate-200 p-1">
+          <button
+            aria-pressed={sortOrder === 'desc'}
+            className={`rounded-md px-3 py-1.5 text-sm ${
+              sortOrder === 'desc' ? 'bg-slate-900 text-white' : 'text-slate-600'
+            }`}
+            onClick={() => setSortOrder('desc')}
+            type="button"
+          >
+            最新在前
+          </button>
+          <button
+            aria-pressed={sortOrder === 'asc'}
+            className={`rounded-md px-3 py-1.5 text-sm ${
+              sortOrder === 'asc' ? 'bg-slate-900 text-white' : 'text-slate-600'
+            }`}
+            onClick={() => setSortOrder('asc')}
+            type="button"
+          >
+            最早在前
+          </button>
+        </div>
+      </div>
       <ul className="mt-4 divide-y divide-slate-100">
-        {transactions.map((transaction) => {
+        {orderedTransactions.map((transaction) => {
           const snapshot = snapshotByTransactionId.get(transaction.id);
           const previousSnapshot = previousSnapshotByTransactionId.get(transaction.id);
 

@@ -105,6 +105,15 @@ function expectSummaryCardValue(label: string, value: string) {
   expect(within(cardElement as HTMLElement).getByText(value)).toBeTruthy();
 }
 
+function getTransactionRows() {
+  const transactionHeading = screen.getAllByText('交易记录').at(-1);
+  const transactionSection = transactionHeading?.closest('section');
+
+  expect(transactionSection).toBeTruthy();
+
+  return within(transactionSection as HTMLElement).getAllByRole('listitem');
+}
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -402,6 +411,85 @@ describe('FundDetailPage', () => {
 
     expect(screen.getByText('分红入账 20.00 元 · 累计分红 20.00')).toBeTruthy();
     expect(screen.getByText('红利再投后持仓 1008.00 份 · 累计分红 30.00')).toBeTruthy();
+  });
+
+  it('shows transactions newest first by default', async () => {
+    mockWatchlist = [
+      {
+        code: '161725',
+        name: '招商中证白酒指数',
+        transactions: [
+          {
+            id: 'buy-1',
+            type: 'buy',
+            tradeDate: '2026-03-01',
+            amount: 1000,
+            nav: 1,
+          },
+          {
+            id: 'sell-1',
+            type: 'sell',
+            tradeDate: '2026-03-02',
+            shares: 200,
+            nav: 1.2,
+          },
+          {
+            id: 'cash-dividend-1',
+            type: 'cash_dividend',
+            tradeDate: '2026-03-03',
+            amount: 20,
+          },
+        ],
+      },
+    ];
+
+    const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
+    render(page);
+
+    expect(screen.getByRole('button', { name: '最新在前' }).getAttribute('aria-pressed')).toBe('true');
+
+    const rows = getTransactionRows();
+
+    expect(within(rows[0]).getByText('现金分红')).toBeTruthy();
+    expect(within(rows[1]).getByText('卖出')).toBeTruthy();
+    expect(within(rows[2]).getByText('买入')).toBeTruthy();
+  });
+
+  it('can switch transaction list to oldest first', async () => {
+    mockWatchlist = [
+      {
+        code: '161725',
+        name: '招商中证白酒指数',
+        transactions: [
+          {
+            id: 'buy-1',
+            type: 'buy',
+            tradeDate: '2026-03-01',
+            amount: 1000,
+            nav: 1,
+          },
+          {
+            id: 'sell-1',
+            type: 'sell',
+            tradeDate: '2026-03-02',
+            shares: 200,
+            nav: 1.2,
+          },
+        ],
+      },
+    ];
+
+    const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
+    render(page);
+
+    fireEvent.click(screen.getByRole('button', { name: '最早在前' }));
+
+    expect(screen.getByRole('button', { name: '最早在前' }).getAttribute('aria-pressed')).toBe('true');
+
+    const rows = getTransactionRows();
+
+    expect(within(rows[0]).getByText('买入')).toBeTruthy();
+    expect(within(rows[1]).getByText('卖出')).toBeTruthy();
   });
 
   it('shows fallback text when no position exists', async () => {
