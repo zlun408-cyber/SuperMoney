@@ -592,8 +592,12 @@ describe('FundDetailPage', () => {
     const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
     render(page);
 
-    expect(screen.getByText('2026-03-01 · 2 笔')).toBeTruthy();
-    expect(screen.getByText('2026-03-03 · 1 笔')).toBeTruthy();
+    const groupedDayOne = screen.getByText('2026-03-01 · 2 笔');
+    const groupedDayTwo = screen.getByText('2026-03-03 · 1 笔');
+    expect(groupedDayOne).toBeTruthy();
+    expect(groupedDayTwo).toBeTruthy();
+    expect(groupedDayOne.className).toContain('rounded-full');
+    expect(groupedDayTwo.className).toContain('rounded-full');
 
     const rows = getTransactionRows();
 
