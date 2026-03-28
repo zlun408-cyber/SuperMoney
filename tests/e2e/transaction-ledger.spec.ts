@@ -1,5 +1,14 @@
 import { expect, test } from '@playwright/test';
 
+function summaryValueLocator(page: Parameters<typeof test>[0]['page'], label: string) {
+  return page
+    .locator('.rounded-xl', {
+      has: page.locator('p', { hasText: label }),
+    })
+    .locator('p')
+    .nth(1);
+}
+
 test('can add buy and sell transactions, then see derived summaries on detail and homepage', async ({ page }) => {
   await page.route('**/api/funds/search?**', async (route) => {
     await route.fulfill({
@@ -65,10 +74,15 @@ test('can add buy and sell transactions, then see derived summaries on detail an
 
   await expect(page.getByText('卖出', { exact: true })).toBeVisible();
   await expect(page.getByText(/2026-03-22 · 份额 200/)).toBeVisible();
-  await expect(page.getByText('持仓成本')).toBeVisible();
-  await expect(page.getByText('800.00')).toBeVisible();
-  await expect(page.getByText('估算盈亏')).toBeVisible();
-  await expect(page.getByText('400.00')).toBeVisible();
+  await expect(page.getByText('持仓概览')).toBeVisible();
+  await expect(page.getByText('当前成本', { exact: true })).toBeVisible();
+  await expect(summaryValueLocator(page, '当前成本')).toHaveText('800.00');
+  await expect(page.getByText('收益拆分')).toBeVisible();
+  await expect(page.getByText('未实现收益', { exact: true })).toBeVisible();
+  await expect(summaryValueLocator(page, '未实现收益')).toHaveText('400.00');
+  await expect(page.getByText('已实现收益', { exact: true })).toBeVisible();
+  await expect(summaryValueLocator(page, '已实现收益')).toHaveText('40.00');
+  await expect(page.getByText('卖出后剩余 800.00 份 · 本次已实现收益 40.00')).toBeVisible();
 
   await page.getByRole('link', { name: '返回首页' }).click();
 
