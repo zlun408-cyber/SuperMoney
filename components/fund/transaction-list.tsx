@@ -36,6 +36,10 @@ function getValueText(transaction: FundTransaction) {
   return `金额 ${transaction.amount}`;
 }
 
+function getDateText(transaction: FundTransaction) {
+  return transaction.tradeDate;
+}
+
 function getTypeClassName(type: FundTransaction['type']) {
   switch (type) {
     case 'buy':
@@ -277,9 +281,11 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
                       {group.transactions.length > 1 ? (
                         <p className="mt-1 text-xs font-medium text-slate-400">当日第 {index + 1} 笔</p>
                       ) : null}
-                      <p className="mt-1 text-sm text-slate-500">
-                        {transaction.tradeDate} · {getValueText(transaction)}
-                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <p className="text-sm text-slate-500">{getDateText(transaction)}</p>
+                        <span className="text-slate-300">·</span>
+                        <p className="text-sm font-semibold text-slate-900">{getValueText(transaction)}</p>
+                      </div>
                       {snapshot ? (
                         <p className="mt-1 text-sm text-slate-600">{getImpactHint(transaction, snapshot, previousSnapshot)}</p>
                       ) : null}

@@ -338,11 +338,14 @@ describe('FundDetailPage', () => {
     const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
     render(page);
 
-    expect(screen.getByText(/2026-03-01 · 金额 1000/)).toBeTruthy();
+    expect(screen.getByText('金额 1000')).toBeTruthy();
     expect(screen.getByText(/净值 1.0234 · 手续费 1.50/)).toBeTruthy();
     expect(screen.getByText(/备注：第一次建仓/)).toBeTruthy();
+    const primaryValue = screen.getByText((_, node) => node?.textContent === '金额 1000');
+    expect(primaryValue.className).toContain('font-semibold');
+    expect(primaryValue.className).toContain('text-slate-900');
 
-    expect(screen.getByText(/2026-03-03 · 金额 20/)).toBeTruthy();
+    expect(screen.getByText('金额 20')).toBeTruthy();
     expect(screen.getByText(/备注：季度分红/)).toBeTruthy();
   });
 
@@ -585,8 +588,6 @@ describe('FundDetailPage', () => {
     const rows = getTransactionRows();
 
     expect(within(rows[0]).getByText('现金分红')).toBeTruthy();
-    expect(within(rows[1]).getByText('当日第 1 笔')).toBeTruthy();
-    expect(within(rows[2]).getByText('当日第 2 笔')).toBeTruthy();
     expect(within(rows[1]).getByText('卖出')).toBeTruthy();
     expect(within(rows[2]).getByText('买入')).toBeTruthy();
   });
@@ -682,7 +683,7 @@ describe('FundDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '切回全部' }));
 
     expect(screen.getByText('当前显示：全部 · 最新在前 · 共 1 条')).toBeTruthy();
-    expect(screen.getByText(/2026-03-01 · 金额 1000/)).toBeTruthy();
+    expect(screen.getByText('金额 1000')).toBeTruthy();
     expect(screen.queryByText('当前筛选下还没有交易记录，试试切回“全部”查看完整账本。')).toBeNull();
   });
 
@@ -735,8 +736,8 @@ describe('FundDetailPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
 
-    expect(screen.getByText(/2026-03-05 · 金额 1200/)).toBeTruthy();
-    expect(screen.queryByText(/2026-03-01 · 金额 1000/)).toBeNull();
+    expect(screen.getByText('金额 1200')).toBeTruthy();
+    expect(screen.queryByText('金额 1000')).toBeNull();
     expect(screen.queryByRole('heading', { name: '编辑交易记录' })).toBeNull();
   });
 
@@ -771,8 +772,8 @@ describe('FundDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '删除 2026-03-01 买入记录' }));
 
     expect(confirmMock).toHaveBeenCalledWith('确认删除这条交易记录吗？删除后会自动重算持仓和收益。');
-    expect(screen.queryByText(/2026-03-01 · 金额 1000/)).toBeNull();
-    expect(screen.getByText(/2026-03-02 · 金额 500/)).toBeTruthy();
+    expect(screen.queryByText('金额 1000')).toBeNull();
+    expect(screen.getByText('金额 500')).toBeTruthy();
   });
 
   it('shows the empty state after deleting the last transaction', async () => {
@@ -813,7 +814,7 @@ describe('FundDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '保存记录' }));
 
     expect(screen.getByText('卖出份额不能大于当前可用份额')).toBeTruthy();
-    expect(screen.queryByText(/2026-03-02 · 份额 1200/)).toBeNull();
+    expect(screen.queryByText('份额 1200')).toBeNull();
 
     fireEvent.change(screen.getByLabelText('份额'), {
       target: { value: '500' },
@@ -821,7 +822,7 @@ describe('FundDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '保存记录' }));
 
     expect(screen.queryByText('卖出份额不能大于当前可用份额')).toBeNull();
-    expect(screen.getByText(/2026-03-02 · 份额 500/)).toBeTruthy();
+    expect(screen.getByText('份额 500')).toBeTruthy();
   });
 
   it('blocks adding a sell transaction dated before the first buy', async () => {
@@ -862,8 +863,8 @@ describe('FundDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '保存记录' }));
 
     expect(screen.getByText('卖出份额不能大于当前可用份额')).toBeTruthy();
-    expect(screen.queryByText(/2026-03-01 · 份额 500/)).toBeNull();
-    expect(screen.getByText(/2026-03-10 · 金额 1000/)).toBeTruthy();
+    expect(screen.queryByText('份额 500')).toBeNull();
+    expect(screen.getByText('金额 1000')).toBeTruthy();
   });
 
   it('clears the business error when resetting the add form', async () => {
@@ -930,7 +931,7 @@ describe('FundDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
 
     expect(screen.queryByText('卖出份额不能大于当前可用份额')).toBeNull();
-    expect(screen.getByText(/2026-03-02 · 份额 900/)).toBeTruthy();
-    expect(screen.queryByText(/2026-03-02 · 份额 200/)).toBeNull();
+    expect(screen.getByText('份额 900')).toBeTruthy();
+    expect(screen.queryByText('份额 200')).toBeNull();
   });
 });

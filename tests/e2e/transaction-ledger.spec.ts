@@ -66,9 +66,10 @@ test('can add buy and sell transactions, then see derived summaries on detail an
   await page.getByLabel('净值').fill('1');
   await page.getByRole('button', { name: '保存记录' }).click();
 
-  const buyRow = transactionRow(page, /2026-03-20 · 金额 1000/);
+  const buyRow = transactionRow(page, /2026-03-20/);
   await expect(buyRow).toBeVisible();
   await expect(buyRow.locator('span', { hasText: '买入' })).toBeVisible();
+  await expect(buyRow.getByText('金额 1000')).toBeVisible();
 
   await page.getByRole('button', { name: '添加交易记录' }).click();
   await page.getByLabel('记录类型').selectOption('sell');
@@ -77,9 +78,10 @@ test('can add buy and sell transactions, then see derived summaries on detail an
   await page.getByLabel('净值').fill('1.2');
   await page.getByRole('button', { name: '保存记录' }).click();
 
-  const sellRow = transactionRow(page, /2026-03-22 · 份额 200/);
+  const sellRow = transactionRow(page, /2026-03-22/);
   await expect(sellRow).toBeVisible();
   await expect(sellRow.locator('span', { hasText: '卖出' })).toBeVisible();
+  await expect(sellRow.getByText('份额 200')).toBeVisible();
   await expect(page.getByText('持仓概览')).toBeVisible();
   await expect(page.getByText('当前成本', { exact: true })).toBeVisible();
   await expect(summaryValueLocator(page, '当前成本')).toHaveText('800.00');

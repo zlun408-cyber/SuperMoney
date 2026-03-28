@@ -280,3 +280,14 @@
 - 做了：执行 `npm run build`，生产构建通过（需在沙箱外运行）
 - 结论：同日多笔交易现在具备更明确的组内顺序提示，账本更接近真实流水视图
 - 下一步：继续补第四阶段更细的账本交互 polish，或在合适节点整理这一轮提交
+
+## 2026-03-28（第四阶段：交易主数值高亮）
+- 做了：先补详情页失败测试，覆盖交易行里的金额 / 份额主数值高亮展示
+- 做了：把交易日期与金额 / 份额拆成两段展示，并把金额 / 份额提升为更醒目的主信息
+- 做了：修正 `tests/e2e/transaction-ledger.spec.ts` 对旧行文案的断言，让 E2E 匹配新的交易行结构
+- 做了：执行 `npx vitest run tests/app/fund-detail-page.test.tsx`，25 个测试全部通过
+- 做了：执行聚焦回归测试 `npx vitest run tests/app/fund-detail-page.test.tsx tests/app/watchlist-page.test.tsx`，32 个测试全部通过
+- 做了：执行 `npm run test`，97 个单测全部通过
+- 做了：执行 `npm run test:e2e`，4 条端到端流程全部通过
+- 结论：交易记录现在会把金额 / 份额作为主信息突出展示，用户扫账本时更容易先抓到关键数字
+- 下一步：继续补第四阶段更细的账本交互 polish，或在合适节点整理这一轮提交
