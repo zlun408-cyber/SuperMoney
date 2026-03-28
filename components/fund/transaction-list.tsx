@@ -2,6 +2,7 @@
 
 import React from 'react';
 
+import { calculateTransactionLedgerSnapshots } from '@/lib/funds/transactions';
 import type { FundTransaction } from '@/lib/funds/types';
 
 interface TransactionListProps {
@@ -65,6 +66,35 @@ function getActionLabel(action: '编辑' | '删除', transaction: FundTransactio
   return `${action} ${transaction.tradeDate} ${getTypeLabel(transaction.type)}记录`;
 }
 
+function getImpactHint(
+  transaction: FundTransaction,
+  snapshot: {
+    currentShares: number;
+    realizedProfit: number;
+    totalDividends: number;
+  },
+  previousSnapshot?: {
+    currentShares: number;
+    realizedProfit: number;
+    totalDividends: number;
+  },
+) {
+  const previousRealizedProfit = previousSnapshot?.realizedProfit ?? 0;
+
+  switch (transaction.type) {
+    case 'buy':
+      return `买入后持仓 ${formatNumber(snapshot.currentShares)} 份`;
+    case 'sell':
+      return `卖出后剩余 ${formatNumber(snapshot.currentShares)} 份 · 本次已实现收益 ${formatNumber(
+        snapshot.realizedProfit - previousRealizedProfit,
+      )}`;
+    case 'cash_dividend':
+      return `分红入账 ${formatNumber(transaction.amount)} 元 · 累计分红 ${formatNumber(snapshot.totalDividends)}`;
+    case 'reinvest_dividend':
+      return `红利再投后持仓 ${formatNumber(snapshot.currentShares)} 份 · 累计分红 ${formatNumber(snapshot.totalDividends)}`;
+  }
+}
+
 export function TransactionList({ transactions, onEditTransaction, onDeleteTransaction }: TransactionListProps) {
   if (transactions.length === 0) {
     return (
@@ -74,52 +104,66 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
     );
   }
 
+  const snapshots = calculateTransactionLedgerSnapshots(transactions);
+  const snapshotByTransactionId = new Map(snapshots.map((snapshot) => [snapshot.transactionId, snapshot]));
+  const previousSnapshotByTransactionId = new Map(
+    snapshots.map((snapshot, index) => [snapshot.transactionId, index > 0 ? snapshots[index - 1] : undefined]),
+  );
+
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <h3 className="text-lg font-semibold text-slate-900">交易记录</h3>
       <ul className="mt-4 divide-y divide-slate-100">
-        {transactions.map((transaction) => (
-          <li key={transaction.id} className="flex items-center justify-between gap-4 py-3">
-            <div>
-              <p>
-                <span
-                  className={`inline-flex rounded-full px-2.5 py-1 text-sm font-medium ${getTypeClassName(
-                    transaction.type,
-                  )}`}
+        {transactions.map((transaction) => {
+          const snapshot = snapshotByTransactionId.get(transaction.id);
+          const previousSnapshot = previousSnapshotByTransactionId.get(transaction.id);
+
+          return (
+            <li key={transaction.id} className="flex items-center justify-between gap-4 py-3">
+              <div>
+                <p>
+                  <span
+                    className={`inline-flex rounded-full px-2.5 py-1 text-sm font-medium ${getTypeClassName(
+                      transaction.type,
+                    )}`}
+                  >
+                    {getTypeLabel(transaction.type)}
+                  </span>
+                </p>
+                <p className="mt-1 text-sm text-slate-500">
+                  {transaction.tradeDate} · {getValueText(transaction)}
+                </p>
+                {snapshot ? (
+                  <p className="mt-1 text-sm text-slate-600">{getImpactHint(transaction, snapshot, previousSnapshot)}</p>
+                ) : null}
+                {getExtraDetails(transaction).length > 0 ? (
+                  <p className="mt-1 text-sm text-slate-500">{getExtraDetails(transaction).join(' · ')}</p>
+                ) : null}
+                {transaction.note ? (
+                  <p className="mt-1 text-sm text-slate-500">备注：{transaction.note}</p>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  aria-label={getActionLabel('编辑', transaction)}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700"
+                  onClick={() => onEditTransaction?.(transaction)}
+                  type="button"
                 >
-                  {getTypeLabel(transaction.type)}
-                </span>
-              </p>
-              <p className="mt-1 text-sm text-slate-500">
-                {transaction.tradeDate} · {getValueText(transaction)}
-              </p>
-              {getExtraDetails(transaction).length > 0 ? (
-                <p className="mt-1 text-sm text-slate-500">{getExtraDetails(transaction).join(' · ')}</p>
-              ) : null}
-              {transaction.note ? (
-                <p className="mt-1 text-sm text-slate-500">备注：{transaction.note}</p>
-              ) : null}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                aria-label={getActionLabel('编辑', transaction)}
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700"
-                onClick={() => onEditTransaction?.(transaction)}
-                type="button"
-              >
-                编辑
-              </button>
-              <button
-                aria-label={getActionLabel('删除', transaction)}
-                className="rounded-lg border border-rose-200 px-3 py-2 text-sm text-rose-600"
-                onClick={() => onDeleteTransaction?.(transaction)}
-                type="button"
-              >
-                删除
-              </button>
-            </div>
-          </li>
-        ))}
+                  编辑
+                </button>
+                <button
+                  aria-label={getActionLabel('删除', transaction)}
+                  className="rounded-lg border border-rose-200 px-3 py-2 text-sm text-rose-600"
+                  onClick={() => onDeleteTransaction?.(transaction)}
+                  type="button"
+                >
+                  删除
+                </button>
+              </div>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

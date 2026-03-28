@@ -5,6 +5,13 @@ interface PositionLot {
   unitCost: number;
 }
 
+export interface TransactionLedgerSnapshot {
+  transactionId: string;
+  currentShares: number;
+  realizedProfit: number;
+  totalDividends: number;
+}
+
 function roundTo(value: number, digits = 2) {
   return Number(value.toFixed(digits));
 }
@@ -108,4 +115,74 @@ export function calculateTransactionLedgerSummary(
     unrealizedProfit,
     totalDividends,
   };
+}
+
+export function calculateTransactionLedgerSnapshots(transactions: FundTransaction[]): TransactionLedgerSnapshot[] {
+  const sortedTransactions = sortTransactionsByDate(transactions);
+  const lots: PositionLot[] = [];
+  let realizedProfit = 0;
+  let totalDividends = 0;
+  const snapshots: TransactionLedgerSnapshot[] = [];
+
+  for (const transaction of sortedTransactions) {
+    if (transaction.type === 'buy') {
+      const fee = transaction.fee ?? 0;
+      const shares = transaction.amount / transaction.nav;
+      const totalCost = transaction.amount + fee;
+
+      lots.push({
+        shares: roundTo(shares, 6),
+        unitCost: totalCost / shares,
+      });
+    } else if (transaction.type === 'reinvest_dividend') {
+      const shares = transaction.amount / transaction.nav;
+      totalDividends = roundTo(totalDividends + transaction.amount);
+
+      lots.push({
+        shares: roundTo(shares, 6),
+        unitCost: transaction.amount / shares,
+      });
+    } else if (transaction.type === 'cash_dividend') {
+      totalDividends = roundTo(totalDividends + transaction.amount);
+      realizedProfit = roundTo(realizedProfit + transaction.amount);
+    } else {
+      let remainingSharesToSell = transaction.shares;
+      let costBasis = 0;
+
+      for (const lot of lots) {
+        if (remainingSharesToSell <= 0) {
+          break;
+        }
+
+        if (lot.shares <= 0) {
+          continue;
+        }
+
+        const consumedShares = Math.min(lot.shares, remainingSharesToSell);
+        costBasis += consumedShares * lot.unitCost;
+        lot.shares = roundTo(lot.shares - consumedShares, 6);
+        remainingSharesToSell = roundTo(remainingSharesToSell - consumedShares, 6);
+      }
+
+      if (remainingSharesToSell > 0) {
+        throw new Error('卖出份额不能大于当前可用份额');
+      }
+
+      const fee = transaction.fee ?? 0;
+      const proceeds = transaction.shares * transaction.nav - fee;
+      realizedProfit = roundTo(realizedProfit + (proceeds - costBasis));
+    }
+
+    snapshots.push({
+      transactionId: transaction.id,
+      currentShares: roundTo(
+        lots.reduce((total, lot) => total + lot.shares, 0),
+        6,
+      ),
+      realizedProfit,
+      totalDividends,
+    });
+  }
+
+  return snapshots;
 }

@@ -336,6 +336,74 @@ describe('FundDetailPage', () => {
     expect(screen.getByText(/备注：季度分红/)).toBeTruthy();
   });
 
+  it('shows post-transaction holding hints for buy and sell rows', async () => {
+    mockWatchlist = [
+      {
+        code: '161725',
+        name: '招商中证白酒指数',
+        transactions: [
+          {
+            id: 'buy-1',
+            type: 'buy',
+            tradeDate: '2026-03-01',
+            amount: 1000,
+            nav: 1,
+          },
+          {
+            id: 'sell-1',
+            type: 'sell',
+            tradeDate: '2026-03-02',
+            shares: 200,
+            nav: 1.2,
+          },
+        ],
+      },
+    ];
+
+    const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
+    render(page);
+
+    expect(screen.getByText('买入后持仓 1000.00 份')).toBeTruthy();
+    expect(screen.getByText('卖出后剩余 800.00 份 · 本次已实现收益 40.00')).toBeTruthy();
+  });
+
+  it('shows dividend impact hints for cash dividend and reinvest rows', async () => {
+    mockWatchlist = [
+      {
+        code: '161725',
+        name: '招商中证白酒指数',
+        transactions: [
+          {
+            id: 'buy-1',
+            type: 'buy',
+            tradeDate: '2026-03-01',
+            amount: 1000,
+            nav: 1,
+          },
+          {
+            id: 'cash-dividend-1',
+            type: 'cash_dividend',
+            tradeDate: '2026-03-03',
+            amount: 20,
+          },
+          {
+            id: 'reinvest-dividend-1',
+            type: 'reinvest_dividend',
+            tradeDate: '2026-03-04',
+            amount: 10,
+            nav: 1.25,
+          },
+        ],
+      },
+    ];
+
+    const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
+    render(page);
+
+    expect(screen.getByText('分红入账 20.00 元 · 累计分红 20.00')).toBeTruthy();
+    expect(screen.getByText('红利再投后持仓 1008.00 份 · 累计分红 30.00')).toBeTruthy();
+  });
+
   it('shows fallback text when no position exists', async () => {
     mockWatchlist = [{ code: '161725', name: '招商中证白酒指数' }];
 
