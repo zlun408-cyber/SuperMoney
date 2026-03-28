@@ -579,8 +579,8 @@ describe('FundDetailPage', () => {
     const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
     render(page);
 
-    expect(screen.getByText('2026-03-03')).toBeTruthy();
-    expect(screen.getByText('2026-03-01')).toBeTruthy();
+    expect(screen.getByText('2026-03-01 · 2 笔')).toBeTruthy();
+    expect(screen.getByText('2026-03-03 · 1 笔')).toBeTruthy();
 
     const rows = getTransactionRows();
 

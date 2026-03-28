@@ -254,7 +254,9 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
         ) : null}
         {groupedTransactions.map((group) => (
           <div key={group.tradeDate}>
-            <p className="text-sm font-medium text-slate-500">{group.tradeDate}</p>
+            <p className="text-sm font-medium text-slate-500">
+              {group.tradeDate} · {group.transactions.length} 笔
+            </p>
             <ul className="mt-2 divide-y divide-slate-100">
               {group.transactions.map((transaction) => {
                 const snapshot = snapshotByTransactionId.get(transaction.id);
