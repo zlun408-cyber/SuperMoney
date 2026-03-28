@@ -379,7 +379,9 @@ describe('FundDetailPage', () => {
     render(page);
 
     expect(screen.getByText('买入后持仓 1000.00 份')).toBeTruthy();
-    expect(screen.getByText('卖出后剩余 800.00 份 · 本次已实现收益 40.00')).toBeTruthy();
+    const sellImpactHint = screen.getByText('卖出后剩余 800.00 份 · 本次已实现收益 40.00');
+    expect(sellImpactHint).toBeTruthy();
+    expect(sellImpactHint.className).toContain('bg-amber-50');
   });
 
   it('shows dividend impact hints for cash dividend and reinvest rows', async () => {
@@ -415,8 +417,12 @@ describe('FundDetailPage', () => {
     const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
     render(page);
 
-    expect(screen.getByText('分红入账 20.00 元 · 累计分红 20.00')).toBeTruthy();
-    expect(screen.getByText('红利再投后持仓 1008.00 份 · 累计分红 30.00')).toBeTruthy();
+    const cashDividendHint = screen.getByText('分红入账 20.00 元 · 累计分红 20.00');
+    const reinvestHint = screen.getByText('红利再投后持仓 1008.00 份 · 累计分红 30.00');
+    expect(cashDividendHint).toBeTruthy();
+    expect(reinvestHint).toBeTruthy();
+    expect(cashDividendHint.className).toContain('bg-sky-50');
+    expect(reinvestHint.className).toContain('bg-sky-50');
   });
 
   it('shows transactions newest first by default', async () => {

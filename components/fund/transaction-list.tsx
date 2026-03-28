@@ -116,6 +116,18 @@ function getImpactHint(
   }
 }
 
+function getImpactHintClassName(type: FundTransaction['type']) {
+  switch (type) {
+    case 'buy':
+      return 'bg-emerald-50 text-emerald-700';
+    case 'sell':
+      return 'bg-amber-50 text-amber-700';
+    case 'cash_dividend':
+    case 'reinvest_dividend':
+      return 'bg-sky-50 text-sky-700';
+  }
+}
+
 export function TransactionList({ transactions, onEditTransaction, onDeleteTransaction }: TransactionListProps) {
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [filterType, setFilterType] = useState<'all' | 'buy' | 'sell' | 'dividend'>('all');
@@ -287,7 +299,13 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
                         <p className="text-sm font-semibold text-slate-900">{getValueText(transaction)}</p>
                       </div>
                       {snapshot ? (
-                        <p className="mt-1 text-sm text-slate-600">{getImpactHint(transaction, snapshot, previousSnapshot)}</p>
+                        <p
+                          className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-sm ${getImpactHintClassName(
+                            transaction.type,
+                          )}`}
+                        >
+                          {getImpactHint(transaction, snapshot, previousSnapshot)}
+                        </p>
                       ) : null}
                       {getExtraDetails(transaction).length > 0 ? (
                         <p className="mt-1 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-sm text-slate-500">
