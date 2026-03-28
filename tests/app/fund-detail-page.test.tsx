@@ -546,6 +546,49 @@ describe('FundDetailPage', () => {
     expect(rows.some((row) => within(row).queryByText('卖出'))).toBe(false);
   });
 
+  it('groups transactions into date sections like a timeline', async () => {
+    mockWatchlist = [
+      {
+        code: '161725',
+        name: '招商中证白酒指数',
+        transactions: [
+          {
+            id: 'buy-1',
+            type: 'buy',
+            tradeDate: '2026-03-01',
+            amount: 1000,
+            nav: 1,
+          },
+          {
+            id: 'sell-1',
+            type: 'sell',
+            tradeDate: '2026-03-01',
+            shares: 200,
+            nav: 1.2,
+          },
+          {
+            id: 'cash-dividend-1',
+            type: 'cash_dividend',
+            tradeDate: '2026-03-03',
+            amount: 20,
+          },
+        ],
+      },
+    ];
+
+    const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
+    render(page);
+
+    expect(screen.getByText('2026-03-03')).toBeTruthy();
+    expect(screen.getByText('2026-03-01')).toBeTruthy();
+
+    const rows = getTransactionRows();
+
+    expect(within(rows[0]).getByText('现金分红')).toBeTruthy();
+    expect(within(rows[1]).getByText('卖出')).toBeTruthy();
+    expect(within(rows[2]).getByText('买入')).toBeTruthy();
+  });
+
   it('shows fallback text when no position exists', async () => {
     mockWatchlist = [{ code: '161725', name: '招商中证白酒指数' }];
 

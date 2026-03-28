@@ -121,6 +121,25 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
 
     return orderedTransactions.filter((transaction) => transaction.type === filterType);
   }, [filterType, orderedTransactions]);
+  const groupedTransactions = useMemo(() => {
+    const groups: Array<{ tradeDate: string; transactions: FundTransaction[] }> = [];
+
+    for (const transaction of visibleTransactions) {
+      const currentGroup = groups.at(-1);
+
+      if (currentGroup?.tradeDate === transaction.tradeDate) {
+        currentGroup.transactions.push(transaction);
+        continue;
+      }
+
+      groups.push({
+        tradeDate: transaction.tradeDate,
+        transactions: [transaction],
+      });
+    }
+
+    return groups;
+  }, [visibleTransactions]);
 
   if (transactions.length === 0) {
     return (
@@ -201,58 +220,65 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
           </div>
         </div>
       </div>
-      <ul className="mt-4 divide-y divide-slate-100">
-        {visibleTransactions.map((transaction) => {
-          const snapshot = snapshotByTransactionId.get(transaction.id);
-          const previousSnapshot = previousSnapshotByTransactionId.get(transaction.id);
+      <div className="mt-4 space-y-4">
+        {groupedTransactions.map((group) => (
+          <div key={group.tradeDate}>
+            <p className="text-sm font-medium text-slate-500">{group.tradeDate}</p>
+            <ul className="mt-2 divide-y divide-slate-100">
+              {group.transactions.map((transaction) => {
+                const snapshot = snapshotByTransactionId.get(transaction.id);
+                const previousSnapshot = previousSnapshotByTransactionId.get(transaction.id);
 
-          return (
-            <li key={transaction.id} className="flex items-center justify-between gap-4 py-3">
-              <div>
-                <p>
-                  <span
-                    className={`inline-flex rounded-full px-2.5 py-1 text-sm font-medium ${getTypeClassName(
-                      transaction.type,
-                    )}`}
-                  >
-                    {getTypeLabel(transaction.type)}
-                  </span>
-                </p>
-                <p className="mt-1 text-sm text-slate-500">
-                  {transaction.tradeDate} · {getValueText(transaction)}
-                </p>
-                {snapshot ? (
-                  <p className="mt-1 text-sm text-slate-600">{getImpactHint(transaction, snapshot, previousSnapshot)}</p>
-                ) : null}
-                {getExtraDetails(transaction).length > 0 ? (
-                  <p className="mt-1 text-sm text-slate-500">{getExtraDetails(transaction).join(' · ')}</p>
-                ) : null}
-                {transaction.note ? (
-                  <p className="mt-1 text-sm text-slate-500">备注：{transaction.note}</p>
-                ) : null}
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  aria-label={getActionLabel('编辑', transaction)}
-                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700"
-                  onClick={() => onEditTransaction?.(transaction)}
-                  type="button"
-                >
-                  编辑
-                </button>
-                <button
-                  aria-label={getActionLabel('删除', transaction)}
-                  className="rounded-lg border border-rose-200 px-3 py-2 text-sm text-rose-600"
-                  onClick={() => onDeleteTransaction?.(transaction)}
-                  type="button"
-                >
-                  删除
-                </button>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+                return (
+                  <li key={transaction.id} className="flex items-center justify-between gap-4 py-3">
+                    <div>
+                      <p>
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-1 text-sm font-medium ${getTypeClassName(
+                            transaction.type,
+                          )}`}
+                        >
+                          {getTypeLabel(transaction.type)}
+                        </span>
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        {transaction.tradeDate} · {getValueText(transaction)}
+                      </p>
+                      {snapshot ? (
+                        <p className="mt-1 text-sm text-slate-600">{getImpactHint(transaction, snapshot, previousSnapshot)}</p>
+                      ) : null}
+                      {getExtraDetails(transaction).length > 0 ? (
+                        <p className="mt-1 text-sm text-slate-500">{getExtraDetails(transaction).join(' · ')}</p>
+                      ) : null}
+                      {transaction.note ? (
+                        <p className="mt-1 text-sm text-slate-500">备注：{transaction.note}</p>
+                      ) : null}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        aria-label={getActionLabel('编辑', transaction)}
+                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700"
+                        onClick={() => onEditTransaction?.(transaction)}
+                        type="button"
+                      >
+                        编辑
+                      </button>
+                      <button
+                        aria-label={getActionLabel('删除', transaction)}
+                        className="rounded-lg border border-rose-200 px-3 py-2 text-sm text-rose-600"
+                        onClick={() => onDeleteTransaction?.(transaction)}
+                        type="button"
+                      >
+                        删除
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
