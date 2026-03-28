@@ -589,6 +589,70 @@ describe('FundDetailPage', () => {
     expect(within(rows[2]).getByText('买入')).toBeTruthy();
   });
 
+  it('shows a toolbar summary for current sort, filter, and result count', async () => {
+    mockWatchlist = [
+      {
+        code: '161725',
+        name: '招商中证白酒指数',
+        transactions: [
+          {
+            id: 'buy-1',
+            type: 'buy',
+            tradeDate: '2026-03-01',
+            amount: 1000,
+            nav: 1,
+          },
+          {
+            id: 'cash-dividend-1',
+            type: 'cash_dividend',
+            tradeDate: '2026-03-03',
+            amount: 20,
+          },
+          {
+            id: 'reinvest-dividend-1',
+            type: 'reinvest_dividend',
+            tradeDate: '2026-03-04',
+            amount: 10,
+            nav: 1.25,
+          },
+        ],
+      },
+    ];
+
+    const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
+    render(page);
+
+    fireEvent.click(screen.getByRole('button', { name: '只看分红' }));
+
+    expect(screen.getByText('当前显示：只看分红 · 最新在前 · 共 2 条')).toBeTruthy();
+  });
+
+  it('shows a filtered empty state when no transaction matches the selected type', async () => {
+    mockWatchlist = [
+      {
+        code: '161725',
+        name: '招商中证白酒指数',
+        transactions: [
+          {
+            id: 'buy-1',
+            type: 'buy',
+            tradeDate: '2026-03-01',
+            amount: 1000,
+            nav: 1,
+          },
+        ],
+      },
+    ];
+
+    const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
+    render(page);
+
+    fireEvent.click(screen.getByRole('button', { name: '卖出' }));
+
+    expect(screen.getByText('当前显示：卖出 · 最新在前 · 共 0 条')).toBeTruthy();
+    expect(screen.getByText('当前筛选下还没有交易记录，试试切回“全部”查看完整账本。')).toBeTruthy();
+  });
+
   it('shows fallback text when no position exists', async () => {
     mockWatchlist = [{ code: '161725', name: '招商中证白酒指数' }];
 

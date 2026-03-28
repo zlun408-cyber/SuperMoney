@@ -66,6 +66,23 @@ function getActionLabel(action: '编辑' | '删除', transaction: FundTransactio
   return `${action} ${transaction.tradeDate} ${getTypeLabel(transaction.type)}记录`;
 }
 
+function getSortLabel(sortOrder: 'desc' | 'asc') {
+  return sortOrder === 'desc' ? '最新在前' : '最早在前';
+}
+
+function getFilterLabel(filterType: 'all' | 'buy' | 'sell' | 'dividend') {
+  switch (filterType) {
+    case 'all':
+      return '全部';
+    case 'buy':
+      return '买入';
+    case 'sell':
+      return '卖出';
+    case 'dividend':
+      return '只看分红';
+  }
+}
+
 function getImpactHint(
   transaction: FundTransaction,
   snapshot: {
@@ -140,6 +157,7 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
 
     return groups;
   }, [visibleTransactions]);
+  const toolbarSummary = `当前显示：${getFilterLabel(filterType)} · ${getSortLabel(sortOrder)} · 共 ${visibleTransactions.length} 条`;
 
   if (transactions.length === 0) {
     return (
@@ -220,7 +238,13 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
           </div>
         </div>
       </div>
+      <p className="mt-3 text-sm text-slate-500">{toolbarSummary}</p>
       <div className="mt-4 space-y-4">
+        {visibleTransactions.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
+            当前筛选下还没有交易记录，试试切回“全部”查看完整账本。
+          </div>
+        ) : null}
         {groupedTransactions.map((group) => (
           <div key={group.tradeDate}>
             <p className="text-sm font-medium text-slate-500">{group.tradeDate}</p>
