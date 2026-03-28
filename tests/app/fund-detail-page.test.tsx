@@ -378,7 +378,9 @@ describe('FundDetailPage', () => {
     const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
     render(page);
 
-    expect(screen.getByText('买入后持仓 1000.00 份')).toBeTruthy();
+    const buyImpactHint = screen.getByText('买入后持仓 1000.00 份');
+    expect(buyImpactHint).toBeTruthy();
+    expect(buyImpactHint.className).toContain('bg-emerald-50');
     const sellImpactHint = screen.getByText('卖出后剩余 800.00 份 · 本次已实现收益 40.00');
     expect(sellImpactHint).toBeTruthy();
     expect(sellImpactHint.className).toContain('bg-amber-50');
