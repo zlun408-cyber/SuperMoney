@@ -242,7 +242,14 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
       <div className="mt-4 space-y-4">
         {visibleTransactions.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
-            当前筛选下还没有交易记录，试试切回“全部”查看完整账本。
+            <p>当前筛选下还没有交易记录，试试切回“全部”查看完整账本。</p>
+            <button
+              className="mt-3 inline-flex rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700"
+              onClick={() => setFilterType('all')}
+              type="button"
+            >
+              切回全部
+            </button>
           </div>
         ) : null}
         {groupedTransactions.map((group) => (

@@ -653,6 +653,37 @@ describe('FundDetailPage', () => {
     expect(screen.getByText('当前筛选下还没有交易记录，试试切回“全部”查看完整账本。')).toBeTruthy();
   });
 
+  it('can reset back to all transactions from the filtered empty state', async () => {
+    mockWatchlist = [
+      {
+        code: '161725',
+        name: '招商中证白酒指数',
+        transactions: [
+          {
+            id: 'buy-1',
+            type: 'buy',
+            tradeDate: '2026-03-01',
+            amount: 1000,
+            nav: 1,
+          },
+        ],
+      },
+    ];
+
+    const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
+    render(page);
+
+    fireEvent.click(screen.getByRole('button', { name: '卖出' }));
+
+    expect(screen.getByText('当前显示：卖出 · 最新在前 · 共 0 条')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '切回全部' }));
+
+    expect(screen.getByText('当前显示：全部 · 最新在前 · 共 1 条')).toBeTruthy();
+    expect(screen.getByText(/2026-03-01 · 金额 1000/)).toBeTruthy();
+    expect(screen.queryByText('当前筛选下还没有交易记录，试试切回“全部”查看完整账本。')).toBeNull();
+  });
+
   it('shows fallback text when no position exists', async () => {
     mockWatchlist = [{ code: '161725', name: '招商中证白酒指数' }];
 
