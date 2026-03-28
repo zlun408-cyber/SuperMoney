@@ -344,6 +344,8 @@ describe('FundDetailPage', () => {
     const primaryValue = screen.getByText((_, node) => node?.textContent === '金额 1000');
     expect(primaryValue.className).toContain('font-semibold');
     expect(primaryValue.className).toContain('text-slate-900');
+    expect(screen.getByText('净值 1.0234 · 手续费 1.50').className).toContain('rounded-full');
+    expect(screen.getByText('备注：第一次建仓').className).toContain('rounded-full');
 
     expect(screen.getByText('金额 20')).toBeTruthy();
     expect(screen.getByText(/备注：季度分红/)).toBeTruthy();
