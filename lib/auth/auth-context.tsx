@@ -39,23 +39,41 @@ export function AuthProvider({ children, authClient }: AuthProviderProps) {
 
     let cancelled = false;
 
-    async function loadSession() {
-      const { data, error } = await activeClient.getSession();
-
-      if (cancelled || error) {
-        if (!cancelled) {
-          setSessionState({
-            isReady: true,
-            session: null,
-          });
-        }
-        return;
+    async function resetToLoggedOutState() {
+      try {
+        await activeClient.signOut();
+      } catch {
+        // Ignore follow-up cleanup failures. The priority is to keep auth bootstrap stable.
       }
 
-      setSessionState({
-        isReady: true,
-        session: data.session,
-      });
+      if (!cancelled) {
+        setSessionState({
+          isReady: true,
+          session: null,
+        });
+      }
+    }
+
+    async function loadSession() {
+      try {
+        const { data, error } = await activeClient.getSession();
+
+        if (cancelled) {
+          return;
+        }
+
+        if (error) {
+          await resetToLoggedOutState();
+          return;
+        }
+
+        setSessionState({
+          isReady: true,
+          session: data.session,
+        });
+      } catch {
+        await resetToLoggedOutState();
+      }
     }
 
     void loadSession();

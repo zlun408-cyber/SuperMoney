@@ -13,6 +13,7 @@ afterEach(() => {
 
 class FakeSupabaseAuthClient implements SupabaseAuthClientLike {
   session: SupabaseSessionLike | null;
+  getSessionError: Error | null = null;
   signInWithPassword = vi.fn().mockResolvedValue({ error: null });
   signUp = vi.fn().mockResolvedValue({ error: null });
   signOut = vi.fn().mockResolvedValue({ error: null });
@@ -23,6 +24,10 @@ class FakeSupabaseAuthClient implements SupabaseAuthClientLike {
   }
 
   async getSession() {
+    if (this.getSessionError) {
+      throw this.getSessionError;
+    }
+
     return {
       data: {
         session: this.session,
@@ -97,5 +102,18 @@ describe('AuthEntry', () => {
     await waitFor(() => {
       expect(authClient.signOut).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('falls back to logged-out state when getSession rejects with an auth refresh error', async () => {
+    const authClient = new FakeSupabaseAuthClient();
+    authClient.getSessionError = new Error('Invalid Refresh Token: Refresh Token Not Found');
+
+    render(
+      <AuthProvider authClient={authClient}>
+        <AuthEntry />
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByRole('button', { name: '登录 / 注册' })).toBeTruthy();
   });
 });
