@@ -444,3 +444,13 @@
 - 做了：执行 `npm run test`，113 个单测全部通过
 - 结论：定投计划现在不再只是静态展示，已经具备最小“自动入账”能力，但云端同步与真实净值确认规则还没补齐
 - 下一步：继续补定投计划云端持久化、去重边界和真实成交净值确认策略
+
+## 2026-03-30（交易重设计：定投计划云端持久化基线）
+- 做了：先补失败测试，覆盖云端 watchlist 读取/保存 `sipPlans`，以及超过结束日期后的 ended 边界
+- 做了：扩展 `lib/sync/cloud-watchlist.ts`，新增 `listSipPlans / replaceSipPlans` 与 `fund_sip_plans` 映射
+- 做了：让云端加载结果按基金挂上 `sipPlans`，云端保存时同步计划数据
+- 做了：补齐自动生成规则边界：当下一次执行超出结束日期时，计划自动标记为 `ended`
+- 做了：执行 `npx vitest run tests/lib/funds/sip-plans.test.ts tests/lib/sync/cloud-watchlist.test.ts tests/lib/hooks/use-watchlist.test.tsx`，19 个测试全部通过
+- 做了：执行 `npm run test`，114 个单测全部通过
+- 结论：定投计划现在已具备本地 + 云端双存储基线，后续主要剩真实 Supabase 表结构落地与更完整的自动生成去重规则
+- 下一步：继续补真实 Supabase 表结构、自动生成去重边界，以及交易表单去手填净值

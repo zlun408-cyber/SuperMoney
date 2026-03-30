@@ -4,6 +4,7 @@ import {
   loadCloudWatchlist,
   saveCloudWatchlist,
   type CloudFundRecord,
+  type CloudSipPlanRecord,
   type CloudTransactionRecord,
   type CloudWatchlistClient,
 } from '@/lib/sync/cloud-watchlist';
@@ -11,8 +12,10 @@ import type { WatchlistFund } from '@/lib/storage/watchlist-storage';
 
 class FakeCloudWatchlistClient implements CloudWatchlistClient {
   fundsToLoad: CloudFundRecord[] = [];
+  sipPlansToLoad: CloudSipPlanRecord[] = [];
   transactionsToLoad: CloudTransactionRecord[] = [];
   replacedFundsInput: Parameters<CloudWatchlistClient['replaceFunds']>[1] | null = null;
+  replacedSipPlansInput: Parameters<CloudWatchlistClient['replaceSipPlans']>[1] | null = null;
   replacedTransactionsInput: Parameters<CloudWatchlistClient['replaceTransactions']>[1] | null = null;
   replaceFundsResult: CloudFundRecord[] = [];
 
@@ -22,6 +25,10 @@ class FakeCloudWatchlistClient implements CloudWatchlistClient {
 
   async listTransactions() {
     return this.transactionsToLoad;
+  }
+
+  async listSipPlans() {
+    return this.sipPlansToLoad;
   }
 
   async replaceFunds(_userId: string, funds: Parameters<CloudWatchlistClient['replaceFunds']>[1]) {
@@ -34,6 +41,10 @@ class FakeCloudWatchlistClient implements CloudWatchlistClient {
     transactions: Parameters<CloudWatchlistClient['replaceTransactions']>[1],
   ) {
     this.replacedTransactionsInput = transactions;
+  }
+
+  async replaceSipPlans(_userId: string, sipPlans: Parameters<CloudWatchlistClient['replaceSipPlans']>[1]) {
+    this.replacedSipPlansInput = sipPlans;
   }
 }
 
@@ -94,6 +105,25 @@ describe('cloud watchlist helpers', () => {
         updatedAt: '2026-03-10T10:00:00.000Z',
       },
     ];
+    client.sipPlansToLoad = [
+      {
+        id: 'sip-1',
+        userId: 'user-1',
+        fundId: 'fund-1',
+        name: '白酒定投',
+        amount: 500,
+        frequency: 'monthly',
+        startDate: '2026-04-01',
+        endDate: '2026-12-31',
+        executionTime: '14:30',
+        executionPeriod: 'before_1500',
+        status: 'active',
+        lastExecutedAt: '2026-04-01T14:30:00.000Z',
+        nextExecutionAt: '2026-05-01T14:30:00.000Z',
+        createdAt: '2026-03-30T10:00:00.000Z',
+        updatedAt: '2026-03-30T10:00:00.000Z',
+      },
+    ];
 
     const watchlist = await loadCloudWatchlist(client, 'user-1');
 
@@ -119,11 +149,27 @@ describe('cloud watchlist helpers', () => {
             note: '部分卖出',
           },
         ],
+        sipPlans: [
+          {
+            id: 'sip-1',
+            name: '白酒定投',
+            amount: 500,
+            frequency: 'monthly',
+            startDate: '2026-04-01',
+            endDate: '2026-12-31',
+            executionTime: '14:30',
+            executionPeriod: 'before_1500',
+            status: 'active',
+            lastExecutedAt: '2026-04-01T14:30:00.000Z',
+            nextExecutionAt: '2026-05-01T14:30:00.000Z',
+          },
+        ],
       },
       {
         code: '110011',
         name: '易方达中小盘',
         transactions: [],
+        sipPlans: [],
       },
     ]);
   });
@@ -166,6 +212,21 @@ describe('cloud watchlist helpers', () => {
             note: '现金分红',
           },
         ],
+        sipPlans: [
+          {
+            id: 'sip-1',
+            name: '白酒定投',
+            amount: 500,
+            frequency: 'monthly',
+            startDate: '2026-04-01',
+            endDate: '2026-12-31',
+            executionTime: '14:30',
+            executionPeriod: 'before_1500',
+            status: 'active',
+            lastExecutedAt: '2026-04-01T14:30:00.000Z',
+            nextExecutionAt: '2026-05-01T14:30:00.000Z',
+          },
+        ],
       },
     ]);
 
@@ -194,6 +255,24 @@ describe('cloud watchlist helpers', () => {
         tradeDate: '2026-03-15',
         amount: 18.8,
         note: '现金分红',
+      },
+    ]);
+
+    expect(client.replacedSipPlansInput).toEqual([
+      {
+        id: 'sip-1',
+        userId: 'user-1',
+        fundId: 'cloud-fund-1',
+        name: '白酒定投',
+        amount: 500,
+        frequency: 'monthly',
+        startDate: '2026-04-01',
+        endDate: '2026-12-31',
+        executionTime: '14:30',
+        executionPeriod: 'before_1500',
+        status: 'active',
+        lastExecutedAt: '2026-04-01T14:30:00.000Z',
+        nextExecutionAt: '2026-05-01T14:30:00.000Z',
       },
     ]);
   });

@@ -75,4 +75,30 @@ describe('materializeSipPlans', () => {
       status: 'active',
     });
   });
+
+  it('marks the plan ended when the next execution would pass the end date', () => {
+    const result = materializeSipPlans({
+      plans: [
+        {
+          ...monthlyPlan,
+          endDate: '2026-04-30',
+        },
+      ],
+      transactions: [],
+      now: '2026-04-30T15:00:00.000Z',
+      resolveConfirmedNav: () => 1.28,
+    });
+
+    expect(result.createdTransactions).toEqual([
+      expect.objectContaining({
+        id: 'sip-1-2026-04-01',
+      }),
+    ]);
+    expect(result.updatedPlans[0]).toMatchObject({
+      id: 'sip-1',
+      status: 'ended',
+      lastExecutedAt: '2026-04-01T14:30:00.000Z',
+      nextExecutionAt: undefined,
+    });
+  });
 });

@@ -213,8 +213,10 @@ describe('useWatchlist', () => {
           updatedAt: '2026-03-20T10:00:00.000Z',
         },
       ]),
+      listSipPlans: vi.fn().mockResolvedValue([]),
       replaceFunds: vi.fn().mockResolvedValue([]),
       replaceTransactions: vi.fn().mockResolvedValue(undefined),
+      replaceSipPlans: vi.fn().mockResolvedValue(undefined),
     };
 
     const { result } = renderHook(() =>
@@ -229,6 +231,7 @@ describe('useWatchlist', () => {
         {
           code: '161725',
           name: '招商中证白酒指数',
+          sipPlans: [],
           transactions: [
             {
               id: 'tx-1',
@@ -249,6 +252,7 @@ describe('useWatchlist', () => {
     const cloudClient: CloudWatchlistClient = {
       listFunds: vi.fn().mockResolvedValue([]),
       listTransactions: vi.fn().mockResolvedValue([]),
+      listSipPlans: vi.fn().mockResolvedValue([]),
       replaceFunds: vi.fn().mockResolvedValue([
         {
           id: 'fund-1',
@@ -259,6 +263,7 @@ describe('useWatchlist', () => {
         },
       ]),
       replaceTransactions: vi.fn().mockResolvedValue(undefined),
+      replaceSipPlans: vi.fn().mockResolvedValue(undefined),
     };
 
     const { result } = renderHook(() =>
@@ -303,8 +308,10 @@ describe('useWatchlist', () => {
         },
       ]),
       listTransactions: vi.fn().mockResolvedValue([]),
+      listSipPlans: vi.fn().mockResolvedValue([]),
       replaceFunds: vi.fn().mockResolvedValue([]),
       replaceTransactions: vi.fn().mockResolvedValue(undefined),
+      replaceSipPlans: vi.fn().mockResolvedValue(undefined),
     };
 
     const { result } = renderHook(() =>
@@ -337,8 +344,10 @@ describe('useWatchlist', () => {
         },
       ]),
       listTransactions: vi.fn().mockResolvedValue([]),
+      listSipPlans: vi.fn().mockResolvedValue([]),
       replaceFunds: vi.fn().mockResolvedValue([]),
       replaceTransactions: vi.fn().mockResolvedValue(undefined),
+      replaceSipPlans: vi.fn().mockResolvedValue(undefined),
     };
 
     let chooseCloud: (() => void) | undefined;
@@ -369,6 +378,7 @@ describe('useWatchlist', () => {
         {
           code: '161725',
           name: '招商中证白酒指数',
+          sipPlans: [],
           transactions: [],
         },
       ]);
@@ -392,6 +402,7 @@ describe('useWatchlist', () => {
         },
       ]),
       listTransactions: vi.fn().mockResolvedValue([]),
+      listSipPlans: vi.fn().mockResolvedValue([]),
       replaceFunds: vi.fn().mockResolvedValue([
         {
           id: 'fund-local-1',
@@ -402,6 +413,7 @@ describe('useWatchlist', () => {
         },
       ]),
       replaceTransactions: vi.fn().mockResolvedValue(undefined),
+      replaceSipPlans: vi.fn().mockResolvedValue(undefined),
     };
 
     let chooseLocal: (() => void) | undefined;
