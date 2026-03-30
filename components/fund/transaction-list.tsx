@@ -287,7 +287,7 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
         {groupedTransactions.map((group) => (
           <div key={group.tradeDate}>
             <p className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-sm font-medium text-slate-500">
-              {group.tradeDate} · {group.transactions.length} 笔
+              {group.tradeDate} · {group.transactions.length} 笔 · 日内{getSortLabel(sortOrder)}
             </p>
             <ul className="mt-2 divide-y divide-slate-100">
               {group.transactions.map((transaction, index) => {

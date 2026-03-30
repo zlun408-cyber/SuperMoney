@@ -636,8 +636,8 @@ describe('FundDetailPage', () => {
     const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
     render(page);
 
-    const groupedDayOne = screen.getByText('2026-03-01 · 2 笔');
-    const groupedDayTwo = screen.getByText('2026-03-03 · 1 笔');
+    const groupedDayOne = screen.getByText('2026-03-01 · 2 笔 · 日内最新在前');
+    const groupedDayTwo = screen.getByText('2026-03-03 · 1 笔 · 日内最新在前');
     expect(groupedDayOne).toBeTruthy();
     expect(groupedDayTwo).toBeTruthy();
     expect(groupedDayOne.className).toContain('rounded-full');
@@ -648,6 +648,40 @@ describe('FundDetailPage', () => {
     expect(within(rows[0]).getByText('现金分红')).toBeTruthy();
     expect(within(rows[1]).getByText('卖出')).toBeTruthy();
     expect(within(rows[2]).getByText('买入')).toBeTruthy();
+  });
+
+  it('shows the intra-day sort direction inside date group headers', async () => {
+    mockWatchlist = [
+      {
+        code: '161725',
+        name: '招商中证白酒指数',
+        transactions: [
+          {
+            id: 'buy-1',
+            type: 'buy',
+            tradeDate: '2026-03-01',
+            amount: 1000,
+            nav: 1,
+          },
+          {
+            id: 'buy-2',
+            type: 'buy',
+            tradeDate: '2026-03-01',
+            amount: 500,
+            nav: 1,
+          },
+        ],
+      },
+    ];
+
+    const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
+    render(page);
+
+    expect(screen.getByText('2026-03-01 · 2 笔 · 日内最新在前')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '最早在前' }));
+
+    expect(screen.getByText('2026-03-01 · 2 笔 · 日内最早在前')).toBeTruthy();
   });
 
   it('shows a toolbar summary for current sort, filter, and result count', async () => {
