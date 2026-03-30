@@ -202,10 +202,84 @@ describe('AddTransactionDialog', () => {
     expect(onAddTransaction).toHaveBeenCalledTimes(1);
     expect(onAddTransaction.mock.calls[0]?.[0]).toMatchObject({
       type: 'buy',
-      tradeDate: '2026-03-01',
+      placedDate: '2026-03-01',
+      placedPeriod: 'before_1500',
+      effectiveDate: '2026-03-01',
       amount: 1000,
-      nav: 1.25,
+      confirmedNav: 1.25,
+      source: 'manual',
     });
+  });
+
+  it('supports choosing 15点后 and optional fee for a buy transaction', () => {
+    const onAddTransaction = vi.fn();
+
+    render(<AddTransactionDialog onAddTransaction={onAddTransaction} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '添加交易记录' }));
+    fireEvent.change(screen.getByLabelText('交易日期'), {
+      target: { value: '2026-03-01' },
+    });
+    fireEvent.change(screen.getByLabelText('下单时段'), {
+      target: { value: 'after_1500' },
+    });
+    fireEvent.change(screen.getByLabelText('金额'), {
+      target: { value: '1000' },
+    });
+    fireEvent.change(screen.getByLabelText('手续费'), {
+      target: { value: '2.5' },
+    });
+    fireEvent.change(screen.getByLabelText('净值'), {
+      target: { value: '1.25' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '保存记录' }));
+
+    expect(onAddTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'buy',
+        placedDate: '2026-03-01',
+        placedPeriod: 'after_1500',
+        effectiveDate: '2026-03-02',
+        amount: 1000,
+        fee: 2.5,
+        confirmedNav: 1.25,
+      }),
+    );
+  });
+
+  it('creates a normalized sell transaction with shares as the primary input', () => {
+    const onAddTransaction = vi.fn();
+
+    render(<AddTransactionDialog onAddTransaction={onAddTransaction} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '添加交易记录' }));
+    fireEvent.change(screen.getByLabelText('记录类型'), {
+      target: { value: 'sell' },
+    });
+    fireEvent.change(screen.getByLabelText('交易日期'), {
+      target: { value: '2026-03-01' },
+    });
+    fireEvent.change(screen.getByLabelText('份额'), {
+      target: { value: '100' },
+    });
+    fireEvent.change(screen.getByLabelText('净值'), {
+      target: { value: '1.5' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '保存记录' }));
+
+    expect(onAddTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'sell',
+        placedDate: '2026-03-01',
+        placedPeriod: 'before_1500',
+        effectiveDate: '2026-03-01',
+        shares: 100,
+        confirmedNav: 1.5,
+        source: 'manual',
+      }),
+    );
   });
 
   it('shows the cash dividend form without nav input', () => {
@@ -262,9 +336,10 @@ describe('AddTransactionDialog', () => {
     expect(onUpdateTransaction.mock.calls[0]?.[0]).toMatchObject({
       id: 'tx-123',
       type: 'buy',
-      tradeDate: '2026-03-05',
+      placedDate: '2026-03-05',
+      effectiveDate: '2026-03-05',
       amount: 1200,
-      nav: 1.3,
+      confirmedNav: 1.3,
     });
   });
 

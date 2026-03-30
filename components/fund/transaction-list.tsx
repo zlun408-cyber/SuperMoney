@@ -37,7 +37,11 @@ function getValueText(transaction: FundTransaction) {
 }
 
 function getDateText(transaction: FundTransaction) {
-  return transaction.tradeDate;
+  return 'effectiveDate' in transaction ? transaction.effectiveDate : transaction.tradeDate;
+}
+
+function getPlacedDateText(transaction: FundTransaction) {
+  return 'placedDate' in transaction ? transaction.placedDate : transaction.tradeDate;
 }
 
 function getTypeClassName(type: FundTransaction['type']) {
@@ -67,7 +71,7 @@ function getExtraDetails(transaction: FundTransaction) {
 }
 
 function getActionLabel(action: '编辑' | '删除', transaction: FundTransaction) {
-  return `${action} ${transaction.tradeDate} ${getTypeLabel(transaction.type)}记录`;
+  return `${action} ${getPlacedDateText(transaction)} ${getTypeLabel(transaction.type)}记录`;
 }
 
 function getSortLabel(sortOrder: 'desc' | 'asc') {
@@ -141,9 +145,10 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
     const countByTradeDate = new Map<string, number>();
 
     for (const transaction of sortTransactionsByDate(transactions)) {
-      const nextSequence = (countByTradeDate.get(transaction.tradeDate) ?? 0) + 1;
+      const tradeDate = getDateText(transaction);
+      const nextSequence = (countByTradeDate.get(tradeDate) ?? 0) + 1;
 
-      countByTradeDate.set(transaction.tradeDate, nextSequence);
+      countByTradeDate.set(tradeDate, nextSequence);
       sequenceById.set(transaction.id, nextSequence);
     }
 
@@ -172,14 +177,15 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
 
     for (const transaction of visibleTransactions) {
       const currentGroup = groups.at(-1);
+      const tradeDate = getDateText(transaction);
 
-      if (currentGroup?.tradeDate === transaction.tradeDate) {
+      if (currentGroup?.tradeDate === tradeDate) {
         currentGroup.transactions.push(transaction);
         continue;
       }
 
       groups.push({
-        tradeDate: transaction.tradeDate,
+        tradeDate,
         transactions: [transaction],
       });
     }

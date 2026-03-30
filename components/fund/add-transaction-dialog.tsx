@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 
-import type { FundTransaction, FundTransactionType } from '@/lib/funds/types';
+import type { FundTradePeriod, FundTransaction, FundTransactionType } from '@/lib/funds/types';
 
 type AddTransactionDialogProps =
   | {
@@ -24,14 +24,17 @@ type FieldErrors = {
   tradeDate?: string;
   amount?: string;
   nav?: string;
+  fee?: string;
 };
 
 type TransactionFormInput = {
   id?: string;
   type: FundTransactionType;
   tradeDate: string;
+  period: FundTradePeriod;
   amount: string;
   nav: string;
+  fee: string;
 };
 
 function invariantEditingProps(
@@ -46,13 +49,24 @@ function invariantEditingProps(
 function resetForm(setters: {
   setType: (value: FundTransactionType) => void;
   setTradeDate: (value: string) => void;
+  setPeriod: (value: FundTradePeriod) => void;
   setAmount: (value: string) => void;
   setNav: (value: string) => void;
+  setFee: (value: string) => void;
 }) {
   setters.setType('buy');
   setters.setTradeDate('');
+  setters.setPeriod('before_1500');
   setters.setAmount('');
   setters.setNav('');
+  setters.setFee('');
+}
+
+function addDays(dateString: string, days: number) {
+  const [year, month, day] = dateString.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
 }
 
 function applyTransactionToForm(
@@ -60,16 +74,20 @@ function applyTransactionToForm(
   setters: {
     setType: (value: FundTransactionType) => void;
     setTradeDate: (value: string) => void;
+    setPeriod: (value: FundTradePeriod) => void;
     setAmount: (value: string) => void;
     setNav: (value: string) => void;
+    setFee: (value: string) => void;
   }
 ) {
   const values = getFormValues(transaction);
 
   setters.setType(values.type);
   setters.setTradeDate(values.tradeDate);
+  setters.setPeriod(values.period);
   setters.setAmount(values.amount);
   setters.setNav(values.nav);
+  setters.setFee(values.fee);
 }
 
 function resolveTransaction(input: TransactionFormInput): { errors: FieldErrors; transaction: FundTransaction | null } {
@@ -93,6 +111,14 @@ function resolveTransaction(input: TransactionFormInput): { errors: FieldErrors;
     }
   }
 
+  if (input.fee) {
+    const fee = Number(input.fee);
+
+    if (!Number.isFinite(fee) || fee < 0) {
+      errors.fee = '请输入大于等于 0 的手续费';
+    }
+  }
+
   if (Object.keys(errors).length > 0) {
     return {
       errors,
@@ -101,14 +127,24 @@ function resolveTransaction(input: TransactionFormInput): { errors: FieldErrors;
   }
 
   const id = input.id ?? `tx-${Date.now()}`;
+  const effectiveDate = input.period === 'after_1500' ? addDays(input.tradeDate, 1) : input.tradeDate;
+  const fee = input.fee ? Number(input.fee) : undefined;
+  const base = {
+    id,
+    note: undefined,
+    fee,
+    placedDate: input.tradeDate,
+    placedPeriod: input.period,
+    effectiveDate,
+    source: 'manual' as const,
+  };
 
   if (input.type === 'cash_dividend') {
     return {
       errors,
       transaction: {
-        id,
+        ...base,
         type: 'cash_dividend',
-        tradeDate: input.tradeDate,
         amount,
       },
     };
@@ -120,11 +156,10 @@ function resolveTransaction(input: TransactionFormInput): { errors: FieldErrors;
     return {
       errors,
       transaction: {
-        id,
+        ...base,
         type: 'buy',
-        tradeDate: input.tradeDate,
         amount,
-        nav,
+        confirmedNav: nav,
       },
     };
   }
@@ -133,11 +168,10 @@ function resolveTransaction(input: TransactionFormInput): { errors: FieldErrors;
     return {
       errors,
       transaction: {
-        id,
+        ...base,
         type: 'reinvest_dividend',
-        tradeDate: input.tradeDate,
         amount,
-        nav,
+        confirmedNav: nav,
       },
     };
   }
@@ -145,21 +179,26 @@ function resolveTransaction(input: TransactionFormInput): { errors: FieldErrors;
   return {
     errors,
     transaction: {
-      id,
+      ...base,
       type: 'sell',
-      tradeDate: input.tradeDate,
       shares: amount,
-      nav,
+      confirmedNav: nav,
     },
   };
 }
 
 function getFormValues(transaction: FundTransaction) {
+  const tradeDate = 'placedDate' in transaction ? transaction.placedDate : transaction.tradeDate;
+  const period = 'placedPeriod' in transaction ? transaction.placedPeriod : 'before_1500';
+  const nav = 'confirmedNav' in transaction ? String(transaction.confirmedNav) : 'nav' in transaction ? String(transaction.nav) : '';
+
   return {
     type: transaction.type,
-    tradeDate: transaction.tradeDate,
+    tradeDate,
+    period,
     amount: String(transaction.type === 'sell' ? transaction.shares : transaction.amount),
-    nav: 'nav' in transaction ? String(transaction.nav) : '',
+    nav,
+    fee: typeof transaction.fee === 'number' ? String(transaction.fee) : '',
   };
 }
 
@@ -175,21 +214,23 @@ export function AddTransactionDialog({
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<FundTransactionType>('buy');
   const [tradeDate, setTradeDate] = useState('');
+  const [period, setPeriod] = useState<FundTradePeriod>('before_1500');
   const [amount, setAmount] = useState('');
   const [nav, setNav] = useState('');
+  const [fee, setFee] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [businessError, setBusinessError] = useState<string | null>(null);
 
   useEffect(() => {
     if (editingTransaction) {
-      applyTransactionToForm(editingTransaction, { setType, setTradeDate, setAmount, setNav });
+      applyTransactionToForm(editingTransaction, { setType, setTradeDate, setPeriod, setAmount, setNav, setFee });
       setFieldErrors({});
       setBusinessError(null);
       setOpen(false);
       return;
     }
 
-    resetForm({ setType, setTradeDate, setAmount, setNav });
+    resetForm({ setType, setTradeDate, setPeriod, setAmount, setNav, setFee });
     setFieldErrors({});
     setBusinessError(null);
   }, [editingTransaction]);
@@ -205,8 +246,10 @@ export function AddTransactionDialog({
     id: editingTransaction?.id,
     type,
     tradeDate,
+    period,
     amount,
     nav,
+    fee,
   });
 
   const syncFieldErrors = (nextInput: TransactionFormInput) => {
@@ -246,7 +289,7 @@ export function AddTransactionDialog({
     }
 
     onAddTransaction(transaction);
-    resetForm({ setType, setTradeDate, setAmount, setNav });
+    resetForm({ setType, setTradeDate, setPeriod, setAmount, setNav, setFee });
     setFieldErrors({});
     setBusinessError(null);
     setOpen(false);
@@ -260,7 +303,7 @@ export function AddTransactionDialog({
       return;
     }
 
-    resetForm({ setType, setTradeDate, setAmount, setNav });
+    resetForm({ setType, setTradeDate, setPeriod, setAmount, setNav, setFee });
     setFieldErrors({});
     setBusinessError(null);
     setOpen(false);
@@ -280,7 +323,7 @@ export function AddTransactionDialog({
               return;
             }
 
-            resetForm({ setType, setTradeDate, setAmount, setNav });
+            resetForm({ setType, setTradeDate, setPeriod, setAmount, setNav, setFee });
             setFieldErrors({});
             setBusinessError(null);
             setOpen(true);
@@ -336,6 +379,18 @@ export function AddTransactionDialog({
           </label>
 
           <label className="grid gap-1 text-sm text-slate-700">
+            <span>下单时段</span>
+            <select
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2"
+              value={period}
+              onChange={(event) => setPeriod(event.target.value as FundTradePeriod)}
+            >
+              <option value="before_1500">15 点前</option>
+              <option value="after_1500">15 点后</option>
+            </select>
+          </label>
+
+          <label className="grid gap-1 text-sm text-slate-700">
             <span>{amountLabel}</span>
             <input
               aria-invalid={fieldErrors.amount ? 'true' : 'false'}
@@ -353,6 +408,26 @@ export function AddTransactionDialog({
               }}
             />
             {fieldErrors.amount ? <p className="text-sm text-rose-600">{fieldErrors.amount}</p> : null}
+          </label>
+
+          <label className="grid gap-1 text-sm text-slate-700">
+            <span>手续费</span>
+            <input
+              aria-invalid={fieldErrors.fee ? 'true' : 'false'}
+              className="rounded-lg border border-slate-300 px-3 py-2"
+              inputMode="decimal"
+              value={fee}
+              onChange={(event) => {
+                const nextFee = event.target.value;
+                setFee(nextFee);
+                setBusinessError(null);
+                syncFieldErrors({
+                  ...getCurrentFormInput(),
+                  fee: nextFee,
+                });
+              }}
+            />
+            {fieldErrors.fee ? <p className="text-sm text-rose-600">{fieldErrors.fee}</p> : null}
           </label>
 
           {usesNav ? (
