@@ -136,6 +136,19 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
   const previousSnapshotByTransactionId = new Map(
     snapshots.map((snapshot, index) => [snapshot.transactionId, index > 0 ? snapshots[index - 1] : undefined]),
   );
+  const sameDaySequenceByTransactionId = useMemo(() => {
+    const sequenceById = new Map<string, number>();
+    const countByTradeDate = new Map<string, number>();
+
+    for (const transaction of sortTransactionsByDate(transactions)) {
+      const nextSequence = (countByTradeDate.get(transaction.tradeDate) ?? 0) + 1;
+
+      countByTradeDate.set(transaction.tradeDate, nextSequence);
+      sequenceById.set(transaction.id, nextSequence);
+    }
+
+    return sequenceById;
+  }, [transactions]);
   const orderedTransactions = useMemo(() => {
     const sortedTransactions = sortTransactionsByDate(transactions);
 
@@ -294,7 +307,9 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
                         </span>
                       </p>
                       {group.transactions.length > 1 ? (
-                        <p className="mt-1 text-xs font-medium text-slate-400">当日第 {index + 1} 笔</p>
+                        <p className="mt-1 text-xs font-medium text-slate-400">
+                          当日第 {sameDaySequenceByTransactionId.get(transaction.id) ?? index + 1} 笔
+                        </p>
                       ) : null}
                       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                         <p className="text-sm text-slate-500">{getDateText(transaction)}</p>

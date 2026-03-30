@@ -506,6 +506,50 @@ describe('FundDetailPage', () => {
     expect(within(rows[1]).getByText('卖出')).toBeTruthy();
   });
 
+  it('keeps same-day sequence labels aligned with actual trade order when viewing newest first', async () => {
+    mockWatchlist = [
+      {
+        code: '161725',
+        name: '招商中证白酒指数',
+        transactions: [
+          {
+            id: 'trade-1',
+            type: 'buy',
+            tradeDate: '2026-03-02',
+            amount: 100,
+            nav: 1,
+          },
+          {
+            id: 'trade-2',
+            type: 'buy',
+            tradeDate: '2026-03-02',
+            amount: 200,
+            nav: 1,
+          },
+          {
+            id: 'trade-3',
+            type: 'buy',
+            tradeDate: '2026-03-02',
+            amount: 300,
+            nav: 1,
+          },
+        ],
+      },
+    ];
+
+    const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
+    render(page);
+
+    const rows = getTransactionRows();
+
+    expect(within(rows[0]).getByText('金额 300')).toBeTruthy();
+    expect(within(rows[0]).getByText('当日第 3 笔')).toBeTruthy();
+    expect(within(rows[1]).getByText('金额 200')).toBeTruthy();
+    expect(within(rows[1]).getByText('当日第 2 笔')).toBeTruthy();
+    expect(within(rows[2]).getByText('金额 100')).toBeTruthy();
+    expect(within(rows[2]).getByText('当日第 1 笔')).toBeTruthy();
+  });
+
   it('can filter transaction list by dividend types', async () => {
     mockWatchlist = [
       {
