@@ -146,6 +146,49 @@ describe('useWatchlist', () => {
     expect(result.current.watchlist[0]?.sipPlans).toEqual([sipPlan]);
   });
 
+  it('auto-generates a due sip buy transaction when a nav resolver is available', () => {
+    const { result } = renderHook(() =>
+      useWatchlist({
+        getNow: () => '2026-04-01T15:00:00.000Z',
+        resolveSipPlanNav: () => 1.25,
+      }),
+    );
+
+    act(() => {
+      result.current.addFund(sampleFund);
+      result.current.addSipPlan('161725', {
+        id: 'sip-1',
+        amount: 500,
+        frequency: 'monthly',
+        startDate: '2026-04-01',
+        endDate: '2026-12-31',
+        executionTime: '14:30',
+        executionPeriod: 'before_1500',
+        status: 'active',
+        nextExecutionAt: '2026-04-01T14:30:00.000Z',
+      });
+    });
+
+    expect(result.current.watchlist[0]?.transactions).toEqual([
+      {
+        id: 'sip-1-2026-04-01',
+        type: 'buy',
+        amount: 500,
+        confirmedNav: 1.25,
+        placedDate: '2026-04-01',
+        placedPeriod: 'before_1500',
+        effectiveDate: '2026-04-01',
+        source: 'sip_plan',
+        sourcePlanId: 'sip-1',
+      },
+    ]);
+    expect(result.current.watchlist[0]?.sipPlans?.[0]).toMatchObject({
+      id: 'sip-1',
+      lastExecutedAt: '2026-04-01T14:30:00.000Z',
+      nextExecutionAt: '2026-05-01T14:30:00.000Z',
+    });
+  });
+
   it('loads the initial watchlist from cloud when user is authenticated', async () => {
     const cloudClient: CloudWatchlistClient = {
       listFunds: vi.fn().mockResolvedValue([

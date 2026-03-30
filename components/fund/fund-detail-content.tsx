@@ -19,14 +19,15 @@ interface FundDetailContentProps {
 
 export function FundDetailContent({ code }: FundDetailContentProps) {
   const { userId, cloudClient } = useAuthSession();
+  const { quotes } = useFundQuotes([code]);
+  const quote = quotes.find((item) => item.code === code);
   const { watchlist, addTransaction, updateTransaction, removeTransaction, addSipPlan } = useWatchlist({
     userId,
     cloudClient,
+    resolveSipPlanNav: () => quote?.estimatedNav ?? null,
   });
   const [editingTransaction, setEditingTransaction] = useState<FundTransaction | null>(null);
   const fund = watchlist.find((item) => item.code === code);
-  const { quotes } = useFundQuotes([code]);
-  const quote = quotes.find((item) => item.code === code);
 
   if (!fund) {
     return (

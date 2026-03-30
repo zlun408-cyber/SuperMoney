@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import type { FundTransaction, PositionInput, SipPlan } from '@/lib/funds/types';
+import { materializeSipPlans } from '@/lib/funds/sip-plans';
 import {
   loadCloudWatchlist,
   saveCloudWatchlist,
@@ -19,12 +20,50 @@ interface UseWatchlistOptions {
   userId?: string | null;
   cloudClient?: CloudWatchlistClient | null;
   onSyncConflict?: ((actions: { useCloud: () => void; useLocal: () => void }) => void) | null;
+  getNow?: () => string;
+  resolveSipPlanNav?: ((args: { code: string; plan: SipPlan }) => number | null) | null;
 }
 
 export function useWatchlist(options: UseWatchlistOptions = {}) {
-  const { userId = null, cloudClient = null, onSyncConflict = null } = options;
+  const {
+    userId = null,
+    cloudClient = null,
+    onSyncConflict = null,
+    getNow = () => new Date().toISOString(),
+    resolveSipPlanNav = null,
+  } = options;
   const [watchlist, setWatchlist] = useState<WatchlistFund[]>([]);
   const isAuthenticated = Boolean(userId && cloudClient);
+
+  const materializeFundSipPlans = (fund: WatchlistFund): WatchlistFund => {
+    if (!resolveSipPlanNav || (fund.sipPlans ?? []).length === 0) {
+      return fund;
+    }
+
+    const result = materializeSipPlans({
+      plans: fund.sipPlans ?? [],
+      transactions: fund.transactions ?? [],
+      now: getNow(),
+      resolveConfirmedNav: (plan) =>
+        resolveSipPlanNav({
+          code: fund.code,
+          plan,
+        }),
+    });
+
+    const hasCreatedTransactions = result.createdTransactions.length > 0;
+    const hasUpdatedPlans = result.updatedPlans.some((plan, index) => plan !== (fund.sipPlans ?? [])[index]);
+
+    if (!hasCreatedTransactions && !hasUpdatedPlans) {
+      return fund;
+    }
+
+    return {
+      ...fund,
+      sipPlans: result.updatedPlans,
+      transactions: [...(fund.transactions ?? []), ...result.createdTransactions],
+    };
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -85,7 +124,7 @@ export function useWatchlist(options: UseWatchlistOptions = {}) {
 
   const updateWatchlist = (updater: (current: WatchlistFund[]) => WatchlistFund[]) => {
     setWatchlist((current) => {
-      const nextWatchlist = updater(current);
+      const nextWatchlist = updater(current).map(materializeFundSipPlans);
 
       if (isAuthenticated && userId && cloudClient) {
         void saveCloudWatchlist(cloudClient, userId, nextWatchlist);

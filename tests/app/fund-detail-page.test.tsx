@@ -205,10 +205,12 @@ describe('FundDetailPage', () => {
     const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
     render(page);
 
-    expect(mockUseWatchlist).toHaveBeenCalledWith({
-      userId: 'user-1',
-      cloudClient,
-    });
+    expect(mockUseWatchlist).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        cloudClient,
+      }),
+    );
     expect(screen.getByText('招商中证白酒指数')).toBeTruthy();
   });
 
