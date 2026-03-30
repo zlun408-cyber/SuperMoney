@@ -670,6 +670,7 @@ describe('FundDetailPage', () => {
 
     expect(screen.getByText('当前显示：卖出 · 最新在前 · 共 0 条')).toBeTruthy();
     expect(screen.getByText('当前筛选下还没有交易记录，试试切回“全部”查看完整账本。')).toBeTruthy();
+    expect(screen.getByText('当前筛选：卖出').className).toContain('rounded-full');
   });
 
   it('can reset back to all transactions from the filtered empty state', async () => {
