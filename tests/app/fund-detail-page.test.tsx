@@ -2,7 +2,7 @@ import React from 'react';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AuthSessionValue } from '@/lib/auth/types';
-import type { FundQuote, FundTransaction } from '@/lib/funds/types';
+import type { FundQuote, FundTransaction, SipPlan } from '@/lib/funds/types';
 import type { WatchlistFund } from '@/lib/storage/watchlist-storage';
 
 let mockWatchlist: WatchlistFund[] = [
@@ -86,6 +86,18 @@ vi.mock('@/lib/hooks/use-watchlist', () => ({
                   transactions: (item.transactions ?? []).filter(
                     (currentTransaction) => currentTransaction.id !== transactionId,
                   ),
+                }
+              : item,
+          ),
+        );
+      },
+      addSipPlan: (code: string, plan: SipPlan) => {
+        setWatchlist((current) =>
+          current.map((item) =>
+            item.code === code
+              ? {
+                  ...item,
+                  sipPlans: [...(item.sipPlans ?? []), plan],
                 }
               : item,
           ),
@@ -198,6 +210,39 @@ describe('FundDetailPage', () => {
       cloudClient,
     });
     expect(screen.getByText('招商中证白酒指数')).toBeTruthy();
+  });
+
+  it('shows a separate sip plan section and can add a plan', async () => {
+    const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
+    render(page);
+
+    expect(screen.getByText('定投计划')).toBeTruthy();
+    expect(screen.getByText('还没有定投计划')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: '添加定投计划' }));
+    fireEvent.change(screen.getByLabelText('定投金额'), {
+      target: { value: '500' },
+    });
+    fireEvent.change(screen.getByLabelText('开始日期'), {
+      target: { value: '2026-04-01' },
+    });
+    fireEvent.change(screen.getByLabelText('结束日期'), {
+      target: { value: '2026-12-31' },
+    });
+    fireEvent.change(screen.getByLabelText('执行时间'), {
+      target: { value: '14:30' },
+    });
+    fireEvent.change(screen.getByLabelText('执行时段'), {
+      target: { value: 'before_1500' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '保存计划' }));
+
+    expect(screen.getByText('每月定投')).toBeTruthy();
+    expect(screen.getByText('金额 500.00')).toBeTruthy();
+    expect(screen.getByText('开始 2026-04-01 · 结束 2026-12-31')).toBeTruthy();
+    expect(screen.getByText('执行时间 14:30 · 15点前')).toBeTruthy();
+    expect(screen.getByText('进行中')).toBeTruthy();
   });
 
 

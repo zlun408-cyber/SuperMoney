@@ -2,8 +2,10 @@
 
 import React, { useState } from 'react';
 
+import { AddSipPlanDialog } from '@/components/fund/add-sip-plan-dialog';
 import { AddTransactionDialog } from '@/components/fund/add-transaction-dialog';
 import { FundDetailCard } from '@/components/fund/fund-detail-card';
+import { SipPlanList } from '@/components/fund/sip-plan-list';
 import { TransactionList } from '@/components/fund/transaction-list';
 import { useAuthSession } from '@/lib/auth/auth-context';
 import { calculateTransactionLedgerSummary } from '@/lib/funds/transactions';
@@ -17,7 +19,7 @@ interface FundDetailContentProps {
 
 export function FundDetailContent({ code }: FundDetailContentProps) {
   const { userId, cloudClient } = useAuthSession();
-  const { watchlist, addTransaction, updateTransaction, removeTransaction } = useWatchlist({
+  const { watchlist, addTransaction, updateTransaction, removeTransaction, addSipPlan } = useWatchlist({
     userId,
     cloudClient,
   });
@@ -37,6 +39,7 @@ export function FundDetailContent({ code }: FundDetailContentProps) {
   }
 
   const transactions = fund.transactions ?? [];
+  const sipPlans = fund.sipPlans ?? [];
   const addTransactionHandler = (transaction: FundTransaction) => addTransaction(code, transaction);
   const cancelEditHandler = () => setEditingTransaction(null);
   const validateTransactionBusinessRules = (transaction: FundTransaction) => {
@@ -75,6 +78,8 @@ export function FundDetailContent({ code }: FundDetailContentProps) {
   return (
     <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 px-6 py-12">
       <FundDetailCard fund={fund} quote={quote} />
+      <AddSipPlanDialog onAddPlan={(plan) => addSipPlan(code, plan)} />
+      <SipPlanList plans={sipPlans} />
       <AddTransactionDialog
         onAddTransaction={addTransactionHandler}
         validateBusinessRules={validateTransactionBusinessRules}

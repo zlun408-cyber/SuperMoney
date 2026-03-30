@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-import type { FundTransaction, PositionInput } from '@/lib/funds/types';
+import type { FundTransaction, PositionInput, SipPlan } from '@/lib/funds/types';
 import {
   loadCloudWatchlist,
   saveCloudWatchlist,
@@ -167,6 +167,19 @@ export function useWatchlist(options: UseWatchlistOptions = {}) {
     );
   };
 
+  const addSipPlan = (code: string, plan: SipPlan) => {
+    updateWatchlist((current) =>
+      current.map((item) =>
+        item.code === code
+          ? {
+              ...item,
+              sipPlans: [...(item.sipPlans ?? []), plan],
+            }
+          : item,
+      ),
+    );
+  };
+
   return {
     watchlist,
     isAuthenticated,
@@ -176,5 +189,6 @@ export function useWatchlist(options: UseWatchlistOptions = {}) {
     addTransaction,
     updateTransaction,
     removeTransaction,
+    addSipPlan,
   };
 }

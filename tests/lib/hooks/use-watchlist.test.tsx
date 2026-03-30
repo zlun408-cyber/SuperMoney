@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useWatchlist } from '@/lib/hooks/use-watchlist';
 import { WATCHLIST_STORAGE_KEY } from '@/lib/storage/watchlist-storage';
 import type { CloudWatchlistClient } from '@/lib/sync/cloud-watchlist';
+import type { SipPlan } from '@/lib/funds/types';
 
 const sampleFund = {
   code: '161725',
@@ -121,6 +122,28 @@ describe('useWatchlist', () => {
     });
 
     expect(result.current.watchlist[0]?.transactions ?? []).toHaveLength(0);
+  });
+
+  it('adds a sip plan to an existing fund', () => {
+    const { result } = renderHook(() => useWatchlist());
+    const sipPlan: SipPlan = {
+      id: 'sip-1',
+      amount: 500,
+      frequency: 'monthly',
+      startDate: '2026-04-01',
+      endDate: '2026-12-31',
+      executionTime: '14:30',
+      executionPeriod: 'before_1500',
+      status: 'active',
+      nextExecutionAt: '2026-04-01T14:30:00.000Z',
+    };
+
+    act(() => {
+      result.current.addFund(sampleFund);
+      result.current.addSipPlan('161725', sipPlan);
+    });
+
+    expect(result.current.watchlist[0]?.sipPlans).toEqual([sipPlan]);
   });
 
   it('loads the initial watchlist from cloud when user is authenticated', async () => {
