@@ -390,6 +390,35 @@ describe('FundDetailPage', () => {
     expect(screen.getByText(/备注：季度分红/)).toBeTruthy();
   });
 
+  it('shows placed period, effective date, and source for normalized transactions', async () => {
+    mockWatchlist = [
+      {
+        code: '161725',
+        name: '招商中证白酒指数',
+        transactions: [
+          {
+            id: 'buy-1',
+            type: 'buy',
+            placedDate: '2026-03-01',
+            placedPeriod: 'after_1500',
+            effectiveDate: '2026-03-02',
+            amount: 1000,
+            fee: 2,
+            confirmedNav: 1.25,
+            source: 'manual',
+          },
+        ],
+      },
+    ];
+
+    const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
+    render(page);
+
+    expect(screen.getByText('下单：2026-03-01 · 15点后')).toBeTruthy();
+    expect(screen.getByText('生效：2026-03-02')).toBeTruthy();
+    expect(screen.getByText('来源：手动录入')).toBeTruthy();
+  });
+
   it('shows post-transaction holding hints for buy and sell rows', async () => {
     mockWatchlist = [
       {

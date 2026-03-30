@@ -44,6 +44,22 @@ function getPlacedDateText(transaction: FundTransaction) {
   return 'placedDate' in transaction ? transaction.placedDate : transaction.tradeDate;
 }
 
+function getPlacedPeriodLabel(transaction: FundTransaction) {
+  if (!('placedPeriod' in transaction)) {
+    return null;
+  }
+
+  return transaction.placedPeriod === 'after_1500' ? '15点后' : '15点前';
+}
+
+function getSourceLabel(transaction: FundTransaction) {
+  if (!('source' in transaction)) {
+    return null;
+  }
+
+  return transaction.source === 'sip_plan' ? '定投计划' : '手动录入';
+}
+
 function getTypeClassName(type: FundTransaction['type']) {
   switch (type) {
     case 'buy':
@@ -317,11 +333,21 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
                           当日第 {sameDaySequenceByTransactionId.get(transaction.id) ?? index + 1} 笔
                         </p>
                       ) : null}
+                      {getPlacedPeriodLabel(transaction) ? (
+                        <p className="mt-1 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-sm text-slate-500">
+                          下单：{getPlacedDateText(transaction)} · {getPlacedPeriodLabel(transaction)}
+                        </p>
+                      ) : null}
                       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                         <p className="text-sm text-slate-500">{getDateText(transaction)}</p>
                         <span className="text-slate-300">·</span>
                         <p className="text-sm font-semibold text-slate-900">{getValueText(transaction)}</p>
                       </div>
+                      {'effectiveDate' in transaction ? (
+                        <p className="mt-1 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-sm text-slate-500">
+                          生效：{transaction.effectiveDate}
+                        </p>
+                      ) : null}
                       {snapshot ? (
                         <p
                           className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-sm ${getImpactHintClassName(
@@ -339,6 +365,11 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
                       {transaction.note ? (
                         <p className="mt-1 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-sm text-slate-500">
                           备注：{transaction.note}
+                        </p>
+                      ) : null}
+                      {getSourceLabel(transaction) ? (
+                        <p className="mt-1 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-sm text-slate-500">
+                          来源：{getSourceLabel(transaction)}
                         </p>
                       ) : null}
                     </div>
