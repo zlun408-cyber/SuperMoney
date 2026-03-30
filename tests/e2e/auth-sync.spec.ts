@@ -36,11 +36,30 @@ interface MockTransactionRow {
   updated_at: string;
 }
 
+interface MockSipPlanRow {
+  id: string;
+  user_id: string;
+  fund_id: string;
+  name: string | null;
+  amount: number;
+  frequency: string;
+  start_date: string;
+  end_date: string | null;
+  execution_time: string;
+  execution_period: string;
+  status: string;
+  last_executed_at: string | null;
+  next_execution_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 async function installSupabaseMocks(page: Page) {
   const accounts = new Map<string, { password: string; user: MockUser; session: MockSession }>();
   const sessionsByToken = new Map<string, MockSession>();
   const funds: MockFundRow[] = [];
   const transactions: MockTransactionRow[] = [];
+  const sipPlans: MockSipPlanRow[] = [];
 
   const createSession = (email: string, password: string) => {
     const existing = accounts.get(email);
@@ -263,6 +282,72 @@ async function installSupabaseMocks(page: Page) {
             nav: item.nav ?? null,
             fee: item.fee ?? null,
             note: item.note ?? null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+        }
+
+        await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(payload) });
+        return;
+      }
+    }
+
+    if (pathname.endsWith('/fund_sip_plans')) {
+      if (method === 'GET') {
+        const userId = (url.searchParams.get('user_id') ?? '').replace('eq.', '');
+        const rows = sipPlans
+          .filter((row) => row.user_id === userId)
+          .sort((a, b) => a.created_at.localeCompare(b.created_at));
+
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(rows) });
+        return;
+      }
+
+      if (method === 'DELETE') {
+        const userId = (url.searchParams.get('user_id') ?? '').replace('eq.', '');
+
+        for (let index = sipPlans.length - 1; index >= 0; index -= 1) {
+          if (sipPlans[index].user_id === userId) {
+            sipPlans.splice(index, 1);
+          }
+        }
+
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+        return;
+      }
+
+      if (method === 'POST') {
+        const payload = request.postDataJSON() as Array<{
+          id: string;
+          user_id: string;
+          fund_id: string;
+          name?: string | null;
+          amount: number;
+          frequency: string;
+          start_date: string;
+          end_date?: string | null;
+          execution_time: string;
+          execution_period: string;
+          status: string;
+          last_executed_at?: string | null;
+          next_execution_at?: string | null;
+        }>;
+
+        for (const item of payload) {
+          sipPlans.push({
+            id: item.id,
+            user_id: item.user_id,
+            fund_id: item.fund_id,
+            name: item.name ?? null,
+            amount: item.amount,
+            frequency: item.frequency,
+            start_date: item.start_date,
+            end_date: item.end_date ?? null,
+            execution_time: item.execution_time,
+            execution_period: item.execution_period,
+            status: item.status,
+            last_executed_at: item.last_executed_at ?? null,
+            next_execution_at: item.next_execution_at ?? null,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           });

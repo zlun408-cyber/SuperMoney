@@ -101,4 +101,25 @@ describe('materializeSipPlans', () => {
       nextExecutionAt: undefined,
     });
   });
+
+  it('does not generate transactions for paused plans', () => {
+    const result = materializeSipPlans({
+      plans: [
+        {
+          ...monthlyPlan,
+          status: 'paused',
+        },
+      ],
+      transactions: [],
+      now: '2026-04-01T15:00:00.000Z',
+      resolveConfirmedNav: () => 1.25,
+    });
+
+    expect(result.createdTransactions).toEqual([]);
+    expect(result.updatedPlans[0]).toMatchObject({
+      id: 'sip-1',
+      status: 'paused',
+      nextExecutionAt: '2026-04-01T14:30:00.000Z',
+    });
+  });
 });

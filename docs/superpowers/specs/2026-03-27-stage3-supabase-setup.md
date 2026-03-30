@@ -22,7 +22,7 @@
 需要在 Supabase 控制台准备 3 样东西：
 
 1. 一个项目
-2. 两张表
+2. 三张表
 3. 项目的 URL 和 anon key
 
 ## 3. 建表 SQL
@@ -40,9 +40,19 @@
 
 - `watchlist_funds`
 - `fund_transactions`
+- `fund_sip_plans`
 - 对应索引
 - `updated_at` 自动更新时间触发器
 - RLS 安全策略
+
+其中 `fund_sip_plans` 用来保存基金详情页里的定投计划，字段覆盖：
+
+- 定投金额
+- 执行周期（daily / weekly / monthly）
+- 开始日期 / 结束日期
+- 执行时间 / 执行时段
+- 当前状态（active / paused / ended）
+- 上次执行时间 / 下次执行时间
 
 ## 4. 环境变量
 项目里已经放好示例文件：
@@ -95,6 +105,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 - 还没有邮箱验证流程
 - 还没有复杂冲突合并
 - 还没有第三阶段专门的 E2E
+- 定投计划的自动执行仍然是前端物化逻辑，不是数据库定时任务
 
 ## 8. 下一步建议
 当 Supabase 真连通后，下一步建议是：

@@ -454,3 +454,13 @@
 - 做了：执行 `npm run test`，114 个单测全部通过
 - 结论：定投计划现在已具备本地 + 云端双存储基线，后续主要剩真实 Supabase 表结构落地与更完整的自动生成去重规则
 - 下一步：继续补真实 Supabase 表结构、自动生成去重边界，以及交易表单去手填净值
+
+## 2026-03-30（交易重设计：Supabase fund_sip_plans 落地说明）
+- 做了：补充 `supabase/stage3-auth-sync.sql`，新增 `fund_sip_plans` 表、索引、updated_at trigger 和 RLS 策略
+- 做了：更新 `docs/superpowers/specs/2026-03-27-stage3-supabase-setup.md`，把 Supabase 落地说明从“两张表”扩展到“三张表”
+- 做了：补一条定投计划暂停态边界测试，确认 `paused` 计划不会自动生成记录
+- 做了：同步更新 `tests/e2e/auth-sync.spec.ts` 的 Supabase REST mock，让 `fund_sip_plans` 的 GET / POST / DELETE 路径具备最小支持
+- 做了：执行 `npx vitest run tests/lib/funds/sip-plans.test.ts`，4 个测试全部通过
+- 做了：执行 `npx playwright test tests/e2e/auth-sync.spec.ts --grep "can login, keep watchlist after reload"`，1 条 E2E 通过
+- 结论：真实 Supabase 落地所需的第三张表说明已经补齐，登录/云同步主流程也确认没有被新表接线打坏
+- 下一步：继续补定投自动生成的更多去重边界，以及交易表单去掉手填净值依赖
