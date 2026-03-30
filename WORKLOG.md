@@ -306,6 +306,18 @@
 - 结论：登录后从首页点基金进入详情页时，已经不会再因为读错本地数据源而提示“没有找到这只基金”
 - 下一步：回到第四阶段主线，继续补账本快速定位或关键记录高亮
 
+## 2026-03-30（交易记录与定投计划重设计：模型与计算层基线）
+- 做了：新增交易重设计文档与实现计划，明确交易记录与定投计划分层方向
+- 做了：先补存储层失败测试，覆盖 `sipPlans` 挂载和旧交易记录向 `placedDate / placedPeriod / effectiveDate` 结构迁移
+- 做了：扩展 `lib/funds/types.ts`，引入新交易字段、来源字段、定投计划类型，并保留旧交易结构兼容层
+- 做了：扩展 `lib/storage/watchlist-storage.ts`，在读取本地数据时完成交易记录标准化并默认补空 `sipPlans`
+- 做了：先补计算层失败测试，覆盖新交易结构下的排序和收益计算
+- 做了：调整 `lib/funds/transactions.ts`，让计算层同时兼容旧字段 `tradeDate/nav` 与新字段 `effectiveDate/confirmedNav`
+- 做了：执行 `npx vitest run tests/lib/storage/watchlist-storage.test.ts tests/lib/hooks/use-watchlist.test.tsx tests/lib/funds/transactions.test.ts`
+- 做了：执行 `npm run test`，105 个单测全部通过
+- 结论：交易记录重设计已经完成底层第一步，当前数据模型和收益计算层都能承接新旧结构并行过渡
+- 下一步：继续推进交易录入表单重构，把买入金额 / 卖出份额 / 15 点前后 / 手续费选填模型落到 UI
+
 ## 2026-03-28（第四阶段：日期分组笔数摘要）
 - 做了：先补详情页失败测试，覆盖日期时间线标题里的“当日几笔”摘要
 - 做了：让每个日期分组标题显示为“YYYY-MM-DD · N 笔”，扫读账本时更容易快速判断当天流水密度

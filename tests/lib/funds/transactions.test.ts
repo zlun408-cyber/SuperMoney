@@ -30,6 +30,35 @@ describe('transactions', () => {
 
       expect(result.map((item) => item.id)).toEqual(['buy-1', 'sell-1']);
     });
+
+    it('sorts normalized transactions by effective date from oldest to newest', () => {
+      const transactions: FundTransaction[] = [
+        {
+          id: 'sell-1',
+          type: 'sell',
+          placedDate: '2026-03-02',
+          placedPeriod: 'after_1500',
+          effectiveDate: '2026-03-03',
+          shares: 50,
+          confirmedNav: 1.3,
+          source: 'manual',
+        },
+        {
+          id: 'buy-1',
+          type: 'buy',
+          placedDate: '2026-03-01',
+          placedPeriod: 'before_1500',
+          effectiveDate: '2026-03-01',
+          amount: 100,
+          confirmedNav: 1,
+          source: 'manual',
+        },
+      ];
+
+      const result = sortTransactionsByDate(transactions);
+
+      expect(result.map((item) => item.id)).toEqual(['buy-1', 'sell-1']);
+    });
   });
 
   describe('calculateTransactionLedgerSummary', () => {
@@ -123,6 +152,42 @@ describe('transactions', () => {
           },
         ]),
       ).toThrow('卖出份额不能大于当前可用份额');
+    });
+
+    it('calculates summary correctly with normalized transactions and optional fees', () => {
+      const result = calculateTransactionLedgerSummary(
+        [
+          {
+            id: 'buy-1',
+            type: 'buy',
+            placedDate: '2026-03-01',
+            placedPeriod: 'before_1500',
+            effectiveDate: '2026-03-01',
+            amount: 100,
+            fee: 2,
+            confirmedNav: 1,
+            source: 'manual',
+          },
+          {
+            id: 'sell-1',
+            type: 'sell',
+            placedDate: '2026-03-02',
+            placedPeriod: 'after_1500',
+            effectiveDate: '2026-03-03',
+            shares: 40,
+            fee: 1,
+            confirmedNav: 1.5,
+            source: 'manual',
+          },
+        ],
+        1.4,
+      );
+
+      expect(result.currentShares).toBe(60);
+      expect(result.currentCost).toBe(61.2);
+      expect(result.averageCost).toBe(1.02);
+      expect(result.realizedProfit).toBe(18.2);
+      expect(result.unrealizedProfit).toBe(22.8);
     });
   });
 });

@@ -15,9 +15,25 @@ const sampleWatchlist = [
       {
         id: 'buy-1',
         type: 'buy',
-        tradeDate: '2026-03-01',
+        placedDate: '2026-03-01',
+        placedPeriod: 'before_1500',
+        effectiveDate: '2026-03-01',
         amount: 1000,
-        nav: 1,
+        confirmedNav: 1,
+        source: 'manual',
+      },
+    ],
+    sipPlans: [
+      {
+        id: 'sip-1',
+        amount: 500,
+        frequency: 'monthly',
+        startDate: '2026-04-01',
+        endDate: '2026-12-31',
+        executionTime: '14:30',
+        executionPeriod: 'before_1500',
+        status: 'active',
+        nextExecutionAt: '2026-04-01T14:30:00.000Z',
       },
     ],
   },
@@ -49,9 +65,73 @@ describe('watchlist storage', () => {
       {
         id: 'buy-1',
         type: 'buy',
-        tradeDate: '2026-03-01',
+        placedDate: '2026-03-01',
+        placedPeriod: 'before_1500',
+        effectiveDate: '2026-03-01',
         amount: 1000,
-        nav: 1,
+        confirmedNav: 1,
+        source: 'manual',
+      },
+    ]);
+  });
+
+  it('keeps sip plans when loading saved watchlist data', () => {
+    window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(sampleWatchlist));
+
+    const loaded = loadWatchlist();
+
+    expect(loaded[0]?.sipPlans).toEqual([
+      {
+        id: 'sip-1',
+        amount: 500,
+        frequency: 'monthly',
+        startDate: '2026-04-01',
+        endDate: '2026-12-31',
+        executionTime: '14:30',
+        executionPeriod: 'before_1500',
+        status: 'active',
+        nextExecutionAt: '2026-04-01T14:30:00.000Z',
+      },
+    ]);
+  });
+
+  it('migrates legacy transaction records to the new placed/effective date structure', () => {
+    window.localStorage.setItem(
+      WATCHLIST_STORAGE_KEY,
+      JSON.stringify([
+        {
+          code: '161725',
+          name: '招商中证白酒指数',
+          transactions: [
+            {
+              id: 'legacy-buy-1',
+              type: 'buy',
+              tradeDate: '2026-03-01',
+              amount: 1000,
+              nav: 1,
+            },
+          ],
+        },
+      ]),
+    );
+
+    expect(loadWatchlist()).toEqual([
+      {
+        code: '161725',
+        name: '招商中证白酒指数',
+        transactions: [
+          {
+            id: 'legacy-buy-1',
+            type: 'buy',
+            placedDate: '2026-03-01',
+            placedPeriod: 'before_1500',
+            effectiveDate: '2026-03-01',
+            amount: 1000,
+            confirmedNav: 1,
+            source: 'manual',
+          },
+        ],
+        sipPlans: [],
       },
     ]);
   });

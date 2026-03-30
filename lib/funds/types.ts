@@ -29,43 +29,103 @@ export interface FundSearchResult {
 }
 
 export type FundTransactionType = 'buy' | 'sell' | 'cash_dividend' | 'reinvest_dividend';
+export type FundTradePeriod = 'before_1500' | 'after_1500';
+export type FundTransactionSource = 'manual' | 'sip_plan';
+export type SipPlanFrequency = 'daily' | 'weekly' | 'monthly';
+export type SipPlanStatus = 'active' | 'paused' | 'ended';
 
 export interface FundTransactionBase {
   id: string;
   type: FundTransactionType;
-  tradeDate: string;
   note?: string;
   fee?: number;
 }
 
-export interface BuyTransaction extends FundTransactionBase {
+export interface LegacyBuyTransaction extends FundTransactionBase {
   type: 'buy';
+  tradeDate: string;
   amount: number;
   nav: number;
 }
 
-export interface SellTransaction extends FundTransactionBase {
+export interface LegacySellTransaction extends FundTransactionBase {
   type: 'sell';
+  tradeDate: string;
   shares: number;
   nav: number;
 }
 
-export interface CashDividendTransaction extends FundTransactionBase {
+export interface LegacyCashDividendTransaction extends FundTransactionBase {
   type: 'cash_dividend';
+  tradeDate: string;
   amount: number;
 }
 
-export interface ReinvestDividendTransaction extends FundTransactionBase {
+export interface LegacyReinvestDividendTransaction extends FundTransactionBase {
   type: 'reinvest_dividend';
+  tradeDate: string;
   amount: number;
   nav: number;
 }
 
-export type FundTransaction =
+export type LegacyFundTransaction =
+  | LegacyBuyTransaction
+  | LegacySellTransaction
+  | LegacyCashDividendTransaction
+  | LegacyReinvestDividendTransaction;
+
+export interface NormalizedFundTransactionBase extends FundTransactionBase {
+  placedDate: string;
+  placedPeriod: FundTradePeriod;
+  effectiveDate: string;
+  source: FundTransactionSource;
+  sourcePlanId?: string;
+}
+
+export interface BuyTransaction extends NormalizedFundTransactionBase {
+  type: 'buy';
+  amount: number;
+  confirmedNav: number;
+}
+
+export interface SellTransaction extends NormalizedFundTransactionBase {
+  type: 'sell';
+  shares: number;
+  confirmedNav: number;
+}
+
+export interface CashDividendTransaction extends NormalizedFundTransactionBase {
+  type: 'cash_dividend';
+  amount: number;
+}
+
+export interface ReinvestDividendTransaction extends NormalizedFundTransactionBase {
+  type: 'reinvest_dividend';
+  amount: number;
+  confirmedNav: number;
+}
+
+export type NormalizedFundTransaction =
   | BuyTransaction
   | SellTransaction
   | CashDividendTransaction
   | ReinvestDividendTransaction;
+
+export type FundTransaction = LegacyFundTransaction | NormalizedFundTransaction;
+
+export interface SipPlan {
+  id: string;
+  name?: string;
+  amount: number;
+  frequency: SipPlanFrequency;
+  startDate: string;
+  endDate?: string;
+  executionTime: string;
+  executionPeriod: FundTradePeriod;
+  status: SipPlanStatus;
+  lastExecutedAt?: string;
+  nextExecutionAt?: string;
+}
 
 export interface TransactionLedgerSummary {
   currentShares: number;

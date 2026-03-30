@@ -16,9 +16,17 @@ function roundTo(value: number, digits = 2) {
   return Number(value.toFixed(digits));
 }
 
+function getTransactionDate(transaction: FundTransaction) {
+  return 'effectiveDate' in transaction ? transaction.effectiveDate : transaction.tradeDate;
+}
+
+function getTransactionNav(transaction: FundTransaction) {
+  return 'confirmedNav' in transaction ? transaction.confirmedNav : transaction.nav;
+}
+
 export function sortTransactionsByDate(transactions: FundTransaction[]) {
   return [...transactions].sort((left, right) => {
-    const byDate = left.tradeDate.localeCompare(right.tradeDate);
+    const byDate = getTransactionDate(left).localeCompare(getTransactionDate(right));
 
     if (byDate !== 0) {
       return byDate;
@@ -40,7 +48,8 @@ export function calculateTransactionLedgerSummary(
   for (const transaction of sortedTransactions) {
     if (transaction.type === 'buy') {
       const fee = transaction.fee ?? 0;
-      const shares = transaction.amount / transaction.nav;
+      const nav = getTransactionNav(transaction);
+      const shares = transaction.amount / nav;
       const totalCost = transaction.amount + fee;
 
       lots.push({
@@ -51,7 +60,8 @@ export function calculateTransactionLedgerSummary(
     }
 
     if (transaction.type === 'reinvest_dividend') {
-      const shares = transaction.amount / transaction.nav;
+      const nav = getTransactionNav(transaction);
+      const shares = transaction.amount / nav;
       totalDividends = roundTo(totalDividends + transaction.amount);
 
       lots.push({
@@ -90,7 +100,7 @@ export function calculateTransactionLedgerSummary(
     }
 
     const fee = transaction.fee ?? 0;
-    const proceeds = transaction.shares * transaction.nav - fee;
+    const proceeds = transaction.shares * getTransactionNav(transaction) - fee;
     realizedProfit = roundTo(realizedProfit + (proceeds - costBasis));
   }
 
@@ -127,7 +137,8 @@ export function calculateTransactionLedgerSnapshots(transactions: FundTransactio
   for (const transaction of sortedTransactions) {
     if (transaction.type === 'buy') {
       const fee = transaction.fee ?? 0;
-      const shares = transaction.amount / transaction.nav;
+      const nav = getTransactionNav(transaction);
+      const shares = transaction.amount / nav;
       const totalCost = transaction.amount + fee;
 
       lots.push({
@@ -135,7 +146,8 @@ export function calculateTransactionLedgerSnapshots(transactions: FundTransactio
         unitCost: totalCost / shares,
       });
     } else if (transaction.type === 'reinvest_dividend') {
-      const shares = transaction.amount / transaction.nav;
+      const nav = getTransactionNav(transaction);
+      const shares = transaction.amount / nav;
       totalDividends = roundTo(totalDividends + transaction.amount);
 
       lots.push({
@@ -169,7 +181,7 @@ export function calculateTransactionLedgerSnapshots(transactions: FundTransactio
       }
 
       const fee = transaction.fee ?? 0;
-      const proceeds = transaction.shares * transaction.nav - fee;
+      const proceeds = transaction.shares * getTransactionNav(transaction) - fee;
       realizedProfit = roundTo(realizedProfit + (proceeds - costBasis));
     }
 

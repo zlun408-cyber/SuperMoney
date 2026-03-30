@@ -359,7 +359,13 @@ describe('useWatchlist', () => {
     });
 
     await waitFor(() => {
-      expect(result.current.watchlist).toEqual(localWatchlist);
+      expect(result.current.watchlist).toEqual([
+        {
+          ...localWatchlist[0],
+          transactions: [],
+          sipPlans: [],
+        },
+      ]);
     });
 
     expect(cloudClient.replaceFunds).toHaveBeenCalledWith('user-1', localWatchlist);
