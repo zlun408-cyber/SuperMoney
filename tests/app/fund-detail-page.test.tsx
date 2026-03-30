@@ -1,6 +1,7 @@
 import React from 'react';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { AuthSessionValue } from '@/lib/auth/types';
 import type { FundQuote, FundTransaction } from '@/lib/funds/types';
 import type { WatchlistFund } from '@/lib/storage/watchlist-storage';
 
@@ -31,8 +32,18 @@ let mockQuotes: FundQuote[] = [
   },
 ];
 
+let mockAuthSession: Pick<AuthSessionValue, 'userId' | 'isAuthenticated' | 'cloudClient'> = {
+  userId: null,
+  isAuthenticated: false,
+  cloudClient: null,
+};
+
+const mockUseWatchlist = vi.fn();
+
 vi.mock('@/lib/hooks/use-watchlist', () => ({
-  useWatchlist: () => {
+  useWatchlist: (...args: unknown[]) => {
+    mockUseWatchlist(...args);
+
     const [watchlist, setWatchlist] = React.useState(mockWatchlist);
 
     return {
@@ -84,6 +95,10 @@ vi.mock('@/lib/hooks/use-watchlist', () => ({
   },
 }));
 
+vi.mock('@/lib/auth/auth-context', () => ({
+  useAuthSession: () => mockAuthSession,
+}));
+
 vi.mock('@/lib/hooks/use-fund-quotes', () => ({
   useFundQuotes: () => ({
     quotes: mockQuotes,
@@ -117,6 +132,12 @@ function getTransactionRows() {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  mockUseWatchlist.mockReset();
+  mockAuthSession = {
+    userId: null,
+    isAuthenticated: false,
+    cloudClient: null,
+  };
   mockWatchlist = [
     {
       code: '161725',
@@ -159,6 +180,24 @@ describe('FundDetailPage', () => {
     const rows = getTransactionRows();
     expect(within(rows[0]).getByText('买入')).toBeTruthy();
     expect(within(rows[0]).getByText(/2026-03-01/)).toBeTruthy();
+  });
+
+  it('uses authenticated watchlist options on the detail page when the user is logged in', async () => {
+    const cloudClient = {} as NonNullable<AuthSessionValue['cloudClient']>;
+    mockAuthSession = {
+      userId: 'user-1',
+      isAuthenticated: true,
+      cloudClient,
+    };
+
+    const page = await FundDetailPage({ params: Promise.resolve({ code: '161725' }) });
+    render(page);
+
+    expect(mockUseWatchlist).toHaveBeenCalledWith({
+      userId: 'user-1',
+      cloudClient,
+    });
+    expect(screen.getByText('招商中证白酒指数')).toBeTruthy();
   });
 
 

@@ -295,6 +295,17 @@
 - 结论：浏览器里残留坏掉的 Supabase refresh token 时，页面现在会稳定回退到未登录态，不再直接炸出开发报错页
 - 下一步：回到第四阶段主线，继续补账本交互可读性增强
 
+## 2026-03-30（登录态详情页：云端 watchlist 对齐修复）
+- 做了：根据“首页能看到基金，但点进去详情页提示未找到”回查首页与详情页的数据源差异
+- 做了：确认首页在登录态下走云端 watchlist，而详情页仍误用默认本地 `useWatchlist()`
+- 做了：先补详情页失败测试，要求登录态时把 `userId` 与 `cloudClient` 传给 `useWatchlist`
+- 做了：让详情页复用 `useAuthSession()`，与首页一致走登录态云端 watchlist
+- 做了：执行 `npx vitest run tests/app/fund-detail-page.test.tsx`，28 个测试全部通过
+- 做了：执行聚焦回归测试 `npx vitest run tests/app/fund-detail-page.test.tsx tests/app/watchlist-page.test.tsx tests/components/auth/auth-entry.test.tsx`，38 个测试全部通过
+- 做了：执行 `npm run test`，101 个单测全部通过
+- 结论：登录后从首页点基金进入详情页时，已经不会再因为读错本地数据源而提示“没有找到这只基金”
+- 下一步：回到第四阶段主线，继续补账本快速定位或关键记录高亮
+
 ## 2026-03-28（第四阶段：日期分组笔数摘要）
 - 做了：先补详情页失败测试，覆盖日期时间线标题里的“当日几笔”摘要
 - 做了：让每个日期分组标题显示为“YYYY-MM-DD · N 笔”，扫读账本时更容易快速判断当天流水密度

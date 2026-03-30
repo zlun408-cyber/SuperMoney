@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import { AddTransactionDialog } from '@/components/fund/add-transaction-dialog';
 import { FundDetailCard } from '@/components/fund/fund-detail-card';
 import { TransactionList } from '@/components/fund/transaction-list';
+import { useAuthSession } from '@/lib/auth/auth-context';
 import { calculateTransactionLedgerSummary } from '@/lib/funds/transactions';
 import { useFundQuotes } from '@/lib/hooks/use-fund-quotes';
 import type { FundTransaction } from '@/lib/funds/types';
@@ -15,7 +16,11 @@ interface FundDetailContentProps {
 }
 
 export function FundDetailContent({ code }: FundDetailContentProps) {
-  const { watchlist, addTransaction, updateTransaction, removeTransaction } = useWatchlist();
+  const { userId, cloudClient } = useAuthSession();
+  const { watchlist, addTransaction, updateTransaction, removeTransaction } = useWatchlist({
+    userId,
+    cloudClient,
+  });
   const [editingTransaction, setEditingTransaction] = useState<FundTransaction | null>(null);
   const fund = watchlist.find((item) => item.code === code);
   const { quotes } = useFundQuotes([code]);
