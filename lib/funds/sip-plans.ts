@@ -85,10 +85,11 @@ export function materializeSipPlans({
   resolveConfirmedNav,
 }: MaterializeSipPlansInput): MaterializeSipPlansResult {
   const createdTransactions: BuyTransaction[] = [];
+  const allTransactions = [...transactions];
   const nowTimestamp = new Date(now).getTime();
 
   const updatedPlans = plans.map((plan) => {
-    if (plan.status !== 'active' || !plan.nextExecutionAt) {
+    if (plan.status === 'ended' || !plan.nextExecutionAt) {
       return plan;
     }
 
@@ -96,15 +97,37 @@ export function materializeSipPlans({
       return plan;
     }
 
-    const placedDate = toDateOnly(plan.nextExecutionAt);
-    const nextExecutionAt = getNextExecutionAt(plan, plan.nextExecutionAt);
-    const nextStatus = isPastPlanEnd(plan, nextExecutionAt) ? 'ended' : 'active';
+    let cursor = plan.nextExecutionAt;
+    let status = plan.status;
+    let lastExecutedAt = plan.lastExecutedAt;
+    let hasChanged = false;
 
-    if (!hasGeneratedTransactionForExecution(transactions, plan.id, placedDate)) {
-      const confirmedNav = resolveConfirmedNav(plan);
+    while (cursor && new Date(cursor).getTime() <= nowTimestamp) {
+      const placedDate = toDateOnly(cursor);
+      const upcomingExecutionAt = getNextExecutionAt(plan, cursor);
+      const nextStatus = isPastPlanEnd(plan, upcomingExecutionAt) ? 'ended' : status;
 
-      if (confirmedNav !== null) {
-        createdTransactions.push({
+      if (status === 'paused') {
+        hasChanged = true;
+
+        if (nextStatus === 'ended') {
+          status = 'ended';
+          cursor = undefined;
+          break;
+        }
+
+        cursor = upcomingExecutionAt;
+        continue;
+      }
+
+      if (!hasGeneratedTransactionForExecution(allTransactions, plan.id, placedDate)) {
+        const confirmedNav = resolveConfirmedNav(plan);
+
+        if (confirmedNav === null) {
+          break;
+        }
+
+        const createdTransaction: BuyTransaction = {
           id: `${plan.id}-${placedDate}`,
           type: 'buy',
           amount: plan.amount,
@@ -114,15 +137,34 @@ export function materializeSipPlans({
           effectiveDate: resolveEffectiveDate(placedDate, plan.executionPeriod),
           source: 'sip_plan',
           sourcePlanId: plan.id,
-        });
+        };
+
+        createdTransactions.push(createdTransaction);
+        allTransactions.push(createdTransaction);
       }
+
+      hasChanged = true;
+      lastExecutedAt = cursor;
+
+      if (nextStatus === 'ended') {
+        status = 'ended';
+        cursor = undefined;
+        break;
+      }
+
+      status = 'active';
+      cursor = upcomingExecutionAt;
+    }
+
+    if (!hasChanged) {
+      return plan;
     }
 
     return {
       ...plan,
-      lastExecutedAt: plan.nextExecutionAt,
-      nextExecutionAt: nextStatus === 'ended' ? undefined : nextExecutionAt,
-      status: nextStatus,
+      lastExecutedAt,
+      nextExecutionAt: status === 'ended' ? undefined : cursor,
+      status,
     };
   });
 
