@@ -20,8 +20,10 @@ function getTransactionDate(transaction: FundTransaction) {
   return 'effectiveDate' in transaction ? transaction.effectiveDate : transaction.tradeDate;
 }
 
-function getTransactionNav(transaction: FundTransaction) {
-  return 'confirmedNav' in transaction ? transaction.confirmedNav : transaction.nav;
+function getTransactionNav(transaction: FundTransaction): number {
+  if ('confirmedNav' in transaction) return transaction.confirmedNav;
+  if ('nav' in transaction) return (transaction as { nav: number }).nav;
+  return 0;
 }
 
 export function sortTransactionsByDate(transactions: FundTransaction[]) {

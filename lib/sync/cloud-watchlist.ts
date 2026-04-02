@@ -235,18 +235,22 @@ export function createSupabaseCloudWatchlistClient(client: SupabaseClient): Clou
       }
 
       const insertResult = await client.from('fund_transactions').insert(
-        transactions.map((transaction) => ({
-          id: transaction.id,
-          user_id: transaction.userId,
-          fund_id: transaction.fundId,
-          type: transaction.type,
-          trade_date: transaction.tradeDate,
-          amount: transaction.amount ?? null,
-          shares: transaction.shares ?? null,
-          nav: transaction.nav ?? null,
-          fee: transaction.fee ?? null,
-          note: transaction.note ?? null,
-        })),
+        transactions.map((transaction) => {
+          const date = 'placedDate' in transaction ? transaction.placedDate : (transaction as { tradeDate: string }).tradeDate;
+          const nav = 'confirmedNav' in transaction ? transaction.confirmedNav : (transaction as { nav: number }).nav;
+          return {
+            id: transaction.id,
+            user_id: transaction.userId,
+            fund_id: transaction.fundId,
+            type: transaction.type,
+            trade_date: date,
+            amount: 'amount' in transaction ? transaction.amount : null,
+            shares: 'shares' in transaction ? transaction.shares : null,
+            nav: nav ?? null,
+            fee: transaction.fee ?? null,
+            note: transaction.note ?? null,
+          };
+        }),
       );
 
       if (insertResult.error) {
@@ -353,18 +357,24 @@ export async function saveCloudWatchlist(
     }
 
     for (const transaction of fund.transactions ?? []) {
-      transactionRows.push({
+      const row: Record<string, unknown> = {
         id: transaction.id,
         userId,
         fundId,
         type: transaction.type,
-        tradeDate: transaction.tradeDate,
-        ...('amount' in transaction ? { amount: transaction.amount } : {}),
-        ...('shares' in transaction ? { shares: transaction.shares } : {}),
-        ...('nav' in transaction ? { nav: transaction.nav } : {}),
-        ...(transaction.fee !== undefined ? { fee: transaction.fee } : {}),
-        ...(transaction.note ? { note: transaction.note } : {}),
-      });
+      };
+      if ('tradeDate' in transaction) {
+        row.tradeDate = (transaction as { tradeDate: string }).tradeDate;
+      }
+      if ('placedDate' in transaction) {
+        row.placedDate = (transaction as { placedDate: string }).placedDate;
+      }
+      if ('amount' in transaction) row.amount = transaction.amount;
+      if ('shares' in transaction) row.shares = transaction.shares;
+      if ('nav' in transaction) row.nav = (transaction as { nav: number }).nav;
+      if (transaction.fee !== undefined) row.fee = transaction.fee;
+      if (transaction.note) row.note = transaction.note;
+      transactionRows.push(row as unknown as typeof transactionRows[number]);
     }
 
     for (const sipPlan of fund.sipPlans ?? []) {
@@ -464,7 +474,9 @@ function mapCloudTransactionToFundTransaction(transaction: CloudTransactionRecor
 }
 
 function compareTransactions(left: FundTransaction, right: FundTransaction): number {
-  const dateCompare = left.tradeDate.localeCompare(right.tradeDate);
+  const leftDate = 'placedDate' in left ? left.placedDate : (left as { tradeDate?: string }).tradeDate ?? '';
+  const rightDate = 'placedDate' in right ? right.placedDate : (right as { tradeDate?: string }).tradeDate ?? '';
+  const dateCompare = leftDate.localeCompare(rightDate);
 
   if (dateCompare !== 0) {
     return dateCompare;
