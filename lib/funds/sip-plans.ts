@@ -1,4 +1,4 @@
-import type { BuyTransaction, FundTransaction, SipPlan } from '@/lib/funds/types';
+import type { BuyTransaction, FundTransaction, SipPlan, SipPlanStatus } from '@/lib/funds/types';
 
 interface MaterializeSipPlansInput {
   plans: SipPlan[];
@@ -97,8 +97,8 @@ export function materializeSipPlans({
       return plan;
     }
 
-    let cursor = plan.nextExecutionAt;
-    let status = plan.status;
+    let cursor: string | undefined = plan.nextExecutionAt;
+    let status: SipPlanStatus = plan.status;
     let lastExecutedAt = plan.lastExecutedAt;
     let hasChanged = false;
 
