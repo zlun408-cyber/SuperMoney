@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 
 import { AddSipPlanDialog } from '@/components/fund/add-sip-plan-dialog';
 import { AddTransactionDialog } from '@/components/fund/add-transaction-dialog';
@@ -8,10 +8,20 @@ import { FundDetailCard } from '@/components/fund/fund-detail-card';
 import { SipPlanList } from '@/components/fund/sip-plan-list';
 import { TransactionList } from '@/components/fund/transaction-list';
 import { useAuthSession } from '@/lib/auth/auth-context';
+import { gradeEstimateConfidence, summarizeEstimateAccuracy } from '@/lib/funds/estimate-accuracy';
 import { calculateTransactionLedgerSummary } from '@/lib/funds/transactions';
 import { useFundQuotes } from '@/lib/hooks/use-fund-quotes';
-import type { FundTransaction } from '@/lib/funds/types';
+import type {
+  EstimateAccuracySummary,
+  EstimateConfidenceLevel,
+  FundTransaction,
+} from '@/lib/funds/types';
 import { useWatchlist } from '@/lib/hooks/use-watchlist';
+import {
+  ESTIMATE_ACCURACY_STORAGE_KEY,
+  ESTIMATE_ACCURACY_UPDATED_EVENT,
+  loadEstimateAccuracySnapshots,
+} from '@/lib/storage/estimate-accuracy-storage';
 
 interface FundDetailContentProps {
   code: string;
@@ -21,13 +31,72 @@ export function FundDetailContent({ code }: FundDetailContentProps) {
   const { userId, cloudClient } = useAuthSession();
   const { quotes } = useFundQuotes([code]);
   const quote = quotes.find((item) => item.code === code);
-  const { watchlist, addTransaction, updateTransaction, removeTransaction, addSipPlan } = useWatchlist({
+  const [estimateAccuracySummary, setEstimateAccuracySummary] =
+    useState<EstimateAccuracySummary | null>(null);
+  const [estimateConfidenceLevel, setEstimateConfidenceLevel] =
+    useState<EstimateConfidenceLevel>('unknown');
+  const { watchlist, isReady, addTransaction, updateTransaction, removeTransaction, addSipPlan } = useWatchlist({
     userId,
     cloudClient,
     resolveSipPlanNav: () => quote?.estimatedNav ?? null,
+    sipPlanMaterializeKey: quote?.updatedAt ?? null,
   });
   const [editingTransaction, setEditingTransaction] = useState<FundTransaction | null>(null);
   const fund = watchlist.find((item) => item.code === code);
+
+  const refreshEstimateAccuracy = useCallback(() => {
+    const snapshots = loadEstimateAccuracySnapshots().filter((snapshot) => snapshot.fundCode === code);
+
+    if (snapshots.length === 0) {
+      setEstimateAccuracySummary({
+        fundCode: code,
+        sampleCount: 0,
+        resolvedSampleCount: 0,
+        averageAbsoluteErrorRate: null,
+        latestQuoteUpdatedAt: null,
+        latestResolvedAt: null,
+      });
+      setEstimateConfidenceLevel('unknown');
+      return;
+    }
+
+    const summary = summarizeEstimateAccuracy(snapshots);
+    setEstimateAccuracySummary(summary);
+    setEstimateConfidenceLevel(gradeEstimateConfidence(summary));
+  }, [code]);
+
+  useEffect(() => {
+    refreshEstimateAccuracy();
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== null && event.key !== ESTIMATE_ACCURACY_STORAGE_KEY) {
+        return;
+      }
+
+      refreshEstimateAccuracy();
+    };
+    const handleEstimateAccuracyUpdated = () => {
+      refreshEstimateAccuracy();
+    };
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener(ESTIMATE_ACCURACY_UPDATED_EVENT, handleEstimateAccuracyUpdated);
+
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener(ESTIMATE_ACCURACY_UPDATED_EVENT, handleEstimateAccuracyUpdated);
+    };
+  }, [refreshEstimateAccuracy]);
+
+  if (!isReady) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-4xl items-center justify-center px-6 py-12">
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-slate-500">
+          正在加载基金详情…
+        </div>
+      </main>
+    );
+  }
 
   if (!fund) {
     return (
@@ -41,6 +110,7 @@ export function FundDetailContent({ code }: FundDetailContentProps) {
 
   const transactions = fund.transactions ?? [];
   const sipPlans = fund.sipPlans ?? [];
+  const executionRecords = fund.sipExecutionRecords ?? [];
   const addTransactionHandler = (transaction: FundTransaction) => addTransaction(code, transaction);
   const cancelEditHandler = () => setEditingTransaction(null);
   const validateTransactionBusinessRules = (transaction: FundTransaction) => {
@@ -78,10 +148,16 @@ export function FundDetailContent({ code }: FundDetailContentProps) {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 px-6 py-12">
-      <FundDetailCard fund={fund} quote={quote} />
+      <FundDetailCard
+        fund={fund}
+        quote={quote}
+        estimateAccuracySummary={estimateAccuracySummary ?? undefined}
+        estimateConfidenceLevel={estimateConfidenceLevel}
+      />
       <AddSipPlanDialog onAddPlan={(plan) => addSipPlan(code, plan)} />
-      <SipPlanList plans={sipPlans} />
+      <SipPlanList plans={sipPlans} executionRecords={executionRecords} />
       <AddTransactionDialog
+        fundCode={code}
         onAddTransaction={addTransactionHandler}
         validateBusinessRules={validateTransactionBusinessRules}
         {...dialogProps}

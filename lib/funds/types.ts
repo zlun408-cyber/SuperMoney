@@ -19,6 +19,9 @@ export interface FundQuote {
   estimatedNav: number;
   changeRate: number;
   updatedAt: string;
+  adjustedEstimatedNav?: number | null;
+  adjustmentApplied?: boolean;
+  adjustmentPolicy?: EstimateAdjustmentPolicy | null;
 }
 
 export interface FundSearchResult {
@@ -26,6 +29,16 @@ export interface FundSearchResult {
   name: string;
   category: string;
   fundType: string;
+}
+
+export type NavCacheSource = 'api' | 'cache' | 'manual';
+
+export interface NavCacheEntry {
+  fundCode: string;
+  date: string;
+  nav: number;
+  updatedAt: string;
+  source: NavCacheSource;
 }
 
 export type FundTransactionType = 'buy' | 'sell' | 'cash_dividend' | 'reinvest_dividend';
@@ -113,6 +126,22 @@ export type NormalizedFundTransaction =
 
 export type FundTransaction = LegacyFundTransaction | NormalizedFundTransaction;
 
+export type SipExecutionStatus = 'pending' | 'generated' | 'skipped';
+
+export interface SipExecutionRecord {
+  id: string;
+  planId: string;
+  fundId: string;
+  executionDate: string;
+  status: SipExecutionStatus;
+  transactionId?: string;
+  generatedAt?: string;
+  skippedAt?: string;
+  skipReason?: 'deleted_generated_transaction';
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface SipPlan {
   id: string;
   name?: string;
@@ -134,4 +163,69 @@ export interface TransactionLedgerSummary {
   realizedProfit: number;
   unrealizedProfit: number;
   totalDividends: number;
+}
+
+export interface EstimateAccuracySnapshot {
+  id: string;
+  fundCode: string;
+  fundName: string;
+  quoteUpdatedAt: string;
+  tradingDate: string;
+  estimatedNav: number;
+  finalNav: number | null;
+  absoluteErrorRate: number | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type EstimateConfidenceLevel = 'high' | 'medium' | 'low' | 'unknown';
+
+export interface EstimateAccuracySummary {
+  fundCode: string;
+  sampleCount: number;
+  resolvedSampleCount: number;
+  averageAbsoluteErrorRate: number | null;
+  latestQuoteUpdatedAt: string | null;
+  latestResolvedAt: string | null;
+}
+
+export type EstimateAdjustmentDecisionStatus =
+  | 'verification'
+  | 'watch'
+  | 'dismissed'
+  | 'validated'
+  | 'failed';
+
+export interface EstimateAdjustmentDecisionHistoryItem {
+  status: EstimateAdjustmentDecisionStatus;
+  updatedAt: string;
+}
+
+export interface EstimateAdjustmentDecisionItem {
+  status: EstimateAdjustmentDecisionStatus;
+  updatedAt: string;
+  history: EstimateAdjustmentDecisionHistoryItem[];
+}
+
+export type EstimateAdjustmentScenarioKey = 'global' | 'late-session' | 'diagnosis-aware';
+export type EstimateAdjustmentPolicyMode = 'active' | 'observe' | 'blocked' | 'inactive';
+export type EstimateAdjustmentDiagnosis = '持续偏高' | '持续偏低' | '波动偏差' | '样本不足';
+
+export interface EstimateAdjustmentPolicy {
+  mode: EstimateAdjustmentPolicyMode;
+  decisionStatus: EstimateAdjustmentDecisionStatus | null;
+  decisionUpdatedAt: string | null;
+  cooldownActive: boolean;
+  cooldownEndsAt: string | null;
+  validationRecommendationStatus?: 'keep' | 'review' | 'downgrade';
+  validationRecommendationLabel?: string | null;
+  validationRecommendationReason?: string | null;
+  scenarioKey: EstimateAdjustmentScenarioKey | null;
+  scenarioLabel: string | null;
+  diagnosis: EstimateAdjustmentDiagnosis | null;
+  recommendedImprovementRate: number | null;
+  correctionFactor: number | null;
+  adjustedEstimatedNav: number | null;
+  reason: string;
 }

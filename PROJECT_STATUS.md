@@ -77,11 +77,28 @@
 - 已完成：当前代码通过 `npm run build`
 - 已完成：当前代码通过聚焦回归测试
 - 已完成：`npm run test:e2e` 的第三阶段联动验证（含冲突选择）
+- 已完成：定投自动生成更多去重边界与交易表单去手填净值（Feature: `sip-auto-nav-202604091610-a1b2`）
+- 已完成：`/api/funds/nav` 切换为历史净值获取链路，修复返回实时估算净值的问题
+- 已完成：净值缓存与 15 点前后日期计算单元测试补齐（`npm run test` 11/11 通过）
+- 已完成：登录态云端交易记录映射修复，避免已规范化字段在云端往返后丢失
+- 已完成：定投执行记录（`pending / generated / skipped`）领域模型与本地/云端持久化
+- 已完成：删除自动生成定投交易后将执行记录标记为 `skipped`，避免刷新后重复生成
+- 已完成：详情页在异步净值到达后重新 materialize 定投，修复执行回放遗漏
+- 已完成：Supabase 新增 `fund_sip_executions` 建表 SQL、RLS 与落地清单
+- 已完成：认证弹窗内联报错回归修复与 E2E 验证
+- 已完成：新增定投执行回放 E2E（删除后刷新不重放）
+- 已完成：修复登录态详情页首次 materialize 定投后未立即回写云端的问题
+- 已完成：新增登录态云端执行记录路径 E2E（生成 -> 删除 -> skipped -> 刷新不重放）
+- 已完成：历史净值获取失败时的降级提示与手填保存路径验证
+- 已完成：estimate accuracy baseline（本地样本采集 / 收敛 / 聚合与可信度分级）
+- 已完成：基金详情页 estimate confidence panel，展示估值可信度、收敛样本数与平均绝对误差
+- 已完成：`/accuracy` 内部准确度看板，支持读取本地 estimate accuracy 样本并按基金汇总误差表现
+- 已完成：新增 `/accuracy` E2E，覆盖 localStorage 种数后的指标卡与基金行可见性
 
 ## 当前主线
-- 当前正在推进：第四阶段“交易账本可读性增强”
-- 当前完成到：详情页收益拆分卡片增强、交易记录列表信息增强、账本说明文案增强、账本卡片分组展示、交易记录账本影响提示、交易记录排序切换、交易记录类型筛选、交易记录按日期分组展示、日期分组笔数摘要、日期分组标题视觉强化、日期分组标题追加日内排序提示、同日多笔交易序号提示、倒序场景下同日交易序号语义修正、交易主数值高亮、交易次要信息条收紧、关键账本影响提示高亮、买入影响提示样式统一、工具栏状态摘要、工具栏摘要辅助标签化、筛选空状态提示、一键恢复全部视图、筛选空状态当前筛选标签、认证初始化容错修复、登录态详情页云端 watchlist 对齐修复、交易模型基线重构、交易计算层兼容新旧结构、交易录入表单基线重构、交易记录列表展示新时间语义与来源信息、定投计划基线 UI、定投计划最小自动生成交易记录链路、定投计划云端持久化基线、定投计划结束态边界处理、定投计划暂停态边界处理、Supabase `fund_sip_plans` 建表与落地说明补齐、页面层与端到端回归验证
-- 下一步：继续推进交易记录与定投计划重设计，优先补齐定投自动生成的更多去重边界与交易表单去手填净值
+- 当前正在推进：估值准确度基线后的高阶 accuracy iteration
+- 当前完成到：第四阶段账本可读性增强、定投计划与执行回放稳定性、历史净值降级路径、estimate accuracy baseline、详情页 estimate confidence panel、`/accuracy` 准确度看板、准确度看板 E2E 回归验证
+- 下一步：进入高阶 accuracy iteration：扩展跨交易日样本覆盖、误差分布/异常基金排查、按数据源与时间窗口分层的可信度阈值校准
 
 ## 关键决策
 - 项目目录名：`SuperFinance`
@@ -95,34 +112,32 @@
 - 交易记录删除先使用浏览器确认框，保持实现简单稳定
 - 错误提示采用“字段级 + 业务级”双层方式，但只在点击保存时触发
 - 第三阶段采用 Supabase 作为认证与云端存储方案
-- 第三阶段云端结构已扩展为三张表：`watchlist_funds`、`fund_transactions`、`fund_sip_plans`
+- 第三阶段云端结构已扩展为四张表：`watchlist_funds`、`fund_transactions`、`fund_sip_plans`、`fund_sip_executions`
 - 首次登录如本地和云端都有数据，不自动合并，必须让用户二选一
 - 本地落地时使用 `.env.local` 提供 `NEXT_PUBLIC_SUPABASE_URL` 与 `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - 第四阶段采用“轻量双增强”方案：先增强收益拆分卡片，再增强交易记录列表可读性
+- estimate accuracy 第一版采用本地 localStorage 样本基线，先验证采集、收敛、聚合和可信度展示，再进入跨周期/分层校准迭代
 - 推荐技术方向：Next.js + TypeScript + Tailwind CSS + localStorage
 - 当前主分支：`master`
 - 当前开发目录：项目主目录 `/Users/zhanglun/Desktop/SuperFinance`
 
 ## 阻塞问题
 - 暂无硬阻塞
-- `npm run build` 在沙箱内会因 Next.js Turbopack 端口绑定限制失败，需在沙箱外验证
-- 下一步主要是把定投计划从“静态计划管理”推进到“自动生成交易记录 + 云端持久化”
+- 残留落地风险：`fund_sip_executions` 需要在线上/目标 Supabase 环境执行 `supabase/stage3-auth-sync.sql`
+- 残留验证风险：暂无新增验证阻塞，主要剩余 Supabase 线上落地验收
 
 ## 重要文件
 - `PROJECT_STATUS.md`：项目当前状态
 - `WORKLOG.md`：按日期记录工作过程
 - `NEXT_STEPS.md`：接下来要做的事
 - `SESSION_RESUME.md`：下次恢复会话的说明
-- `docs/superpowers/specs/2026-03-25-fund-monitoring-design.md`：第一阶段设计文档
-- `docs/superpowers/plans/2026-03-25-fund-monitoring-mvp.md`：第一阶段实现计划
-- `docs/superpowers/specs/2026-03-26-trade-ledger-design.md`：第二阶段设计文档
-- `docs/superpowers/plans/2026-03-26-trade-ledger-phase2.md`：第二阶段实现计划
-- `docs/superpowers/specs/2026-03-27-transaction-record-edit-delete-design.md`：交易记录编辑/删除设计文档
-- `docs/superpowers/plans/2026-03-27-transaction-record-edit-delete.md`：交易记录编辑/删除实现计划
-- `docs/superpowers/specs/2026-03-27-transaction-validation-feedback-design.md`：交易记录错误提示设计文档
-- `docs/superpowers/plans/2026-03-27-transaction-validation-feedback.md`：交易记录错误提示实现计划
-- `docs/superpowers/specs/2026-03-27-stage3-auth-sync-design.md`：第三阶段登录与云同步设计文档
-- `docs/superpowers/plans/2026-03-27-stage3-auth-sync.md`：第三阶段登录与云同步实现计划
-- `docs/superpowers/specs/2026-03-27-stage3-supabase-setup.md`：第三阶段 Supabase 落地说明
-- `docs/superpowers/specs/2026-03-27-stage4-ledger-readability-design.md`：第四阶段交易账本可读性增强设计文档
-- `docs/superpowers/plans/2026-03-27-stage4-ledger-readability.md`：第四阶段交易账本可读性增强实现计划
+- `docs/project/superfinance/docs/index.md`：项目文档索引
+- `docs/project/superfinance/docs/framework.md`：当前系统框架与 Supabase 数据结构
+- `docs/project/superfinance/docs/supabase-rollout-checklist.md`：`fund_sip_executions` SQL 执行与验收清单
+- `docs/design/sip-auto-nav-202604091610-a1b2/design-spec.md`：历史净值自动获取设计文档
+- `docs/design/sip-execution-replay-20260409200801-kr33/design-spec.md`：定投执行回放设计文档
+- `docs/superpowers/specs/2026-04-10-sip-execution-replay-design.md`：定投执行回放补充设计
+- `docs/superpowers/plans/2026-04-10-sip-execution-replay.md`：定投执行回放实现计划
+- `app/accuracy/page.tsx`：估值准确度内部看板入口
+- `components/fund/estimate-confidence-panel.tsx`：基金详情页估值可信度面板
+- `tests/e2e/estimate-accuracy-dashboard.spec.ts`：准确度看板 E2E 回归

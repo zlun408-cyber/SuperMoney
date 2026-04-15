@@ -17,6 +17,8 @@ export function AuthDialog({ open, onClose, onLogin, onRegister }: AuthDialogPro
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!open) {
     return null;
@@ -31,22 +33,32 @@ export function AuthDialog({ open, onClose, onLogin, onRegister }: AuthDialogPro
       password,
     };
 
-    if (mode === 'login') {
-      await onLogin(payload);
-    } else {
-      await onRegister(payload);
-    }
+    setIsSubmitting(true);
+    setErrorMessage(null);
 
-    setEmail('');
-    setPassword('');
-    setMode('login');
-    onClose();
+    try {
+      if (mode === 'login') {
+        await onLogin(payload);
+      } else {
+        await onRegister(payload);
+      }
+
+      setEmail('');
+      setPassword('');
+      setMode('login');
+      onClose();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '操作失败，请稍后重试');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleClose = () => {
     setEmail('');
     setPassword('');
     setMode('login');
+    setErrorMessage(null);
     onClose();
   };
 
@@ -66,7 +78,10 @@ export function AuthDialog({ open, onClose, onLogin, onRegister }: AuthDialogPro
         <button
           aria-pressed={mode === 'login'}
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          onClick={() => setMode('login')}
+          onClick={() => {
+            setMode('login');
+            setErrorMessage(null);
+          }}
           type="button"
         >
           登录
@@ -75,7 +90,10 @@ export function AuthDialog({ open, onClose, onLogin, onRegister }: AuthDialogPro
           aria-label="切换到注册"
           aria-pressed={mode === 'register'}
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          onClick={() => setMode('register')}
+          onClick={() => {
+            setMode('register');
+            setErrorMessage(null);
+          }}
           type="button"
         >
           注册
@@ -87,7 +105,10 @@ export function AuthDialog({ open, onClose, onLogin, onRegister }: AuthDialogPro
           <span>邮箱</span>
           <input
             className="rounded-lg border border-slate-300 px-3 py-2"
-            onChange={(event) => setEmail(event.target.value)}
+            onChange={(event) => {
+              setEmail(event.target.value);
+              setErrorMessage(null);
+            }}
             type="email"
             value={email}
           />
@@ -96,21 +117,31 @@ export function AuthDialog({ open, onClose, onLogin, onRegister }: AuthDialogPro
           <span>密码</span>
           <input
             className="rounded-lg border border-slate-300 px-3 py-2"
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={(event) => {
+              setPassword(event.target.value);
+              setErrorMessage(null);
+            }}
             type="password"
             value={password}
           />
         </label>
       </div>
 
+      {errorMessage ? (
+        <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" role="alert">
+          {errorMessage}
+        </div>
+      ) : null}
+
       <div className="mt-4">
         <button
           aria-label={submitAriaLabel}
-          className="rounded-xl bg-emerald-600 px-4 py-2 text-white"
+          className="rounded-xl bg-emerald-600 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={isSubmitting}
           onClick={() => void handleSubmit()}
           type="button"
         >
-          {submitLabel}
+          {isSubmitting ? '提交中...' : submitLabel}
         </button>
       </div>
     </div>

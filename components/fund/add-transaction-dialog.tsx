@@ -2,10 +2,12 @@
 
 import React, { useEffect, useState } from 'react';
 
+import { useAutoNav } from '@/lib/hooks/use-auto-nav';
 import type { FundTradePeriod, FundTransaction, FundTransactionType } from '@/lib/funds/types';
 
 type AddTransactionDialogProps =
   | {
+      fundCode: string;
       onAddTransaction: (transaction: FundTransaction) => void;
       editingTransaction?: null;
       onUpdateTransaction?: never;
@@ -13,6 +15,7 @@ type AddTransactionDialogProps =
       validateBusinessRules?: (transaction: FundTransaction) => string | null;
     }
   | {
+      fundCode: string;
       onAddTransaction: (transaction: FundTransaction) => void;
       editingTransaction: FundTransaction;
       onUpdateTransaction: (transaction: FundTransaction) => void;
@@ -53,6 +56,8 @@ function resetForm(setters: {
   setAmount: (value: string) => void;
   setNav: (value: string) => void;
   setFee: (value: string) => void;
+  setNavHint?: (value: string | null) => void;
+  resetAutoNav?: () => void;
 }) {
   setters.setType('buy');
   setters.setTradeDate('');
@@ -60,6 +65,8 @@ function resetForm(setters: {
   setters.setAmount('');
   setters.setNav('');
   setters.setFee('');
+  setters.setNavHint?.(null);
+  setters.resetAutoNav?.();
 }
 
 function addDays(dateString: string, days: number) {
@@ -203,6 +210,7 @@ function getFormValues(transaction: FundTransaction) {
 }
 
 export function AddTransactionDialog({
+  fundCode,
   onAddTransaction,
   editingTransaction = null,
   onUpdateTransaction,
@@ -220,12 +228,16 @@ export function AddTransactionDialog({
   const [fee, setFee] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [businessError, setBusinessError] = useState<string | null>(null);
+  const [navHint, setNavHint] = useState<string | null>(null);
+  const { state: autoNavState, fetchNav, reset: resetAutoNav } = useAutoNav();
 
   useEffect(() => {
     if (editingTransaction) {
       applyTransactionToForm(editingTransaction, { setType, setTradeDate, setPeriod, setAmount, setNav, setFee });
       setFieldErrors({});
       setBusinessError(null);
+      setNavHint(null);
+      resetAutoNav();
       setOpen(false);
       return;
     }
@@ -233,6 +245,8 @@ export function AddTransactionDialog({
     resetForm({ setType, setTradeDate, setPeriod, setAmount, setNav, setFee });
     setFieldErrors({});
     setBusinessError(null);
+    setNavHint(null);
+    resetAutoNav();
   }, [editingTransaction]);
 
   const isEditing = editingTransaction !== null;
@@ -241,6 +255,25 @@ export function AddTransactionDialog({
   const amountLabel = type === 'sell' ? '份额' : '金额';
   const title = isEditing ? '编辑交易记录' : '交易记录';
   const description = isEditing ? '修改已有交易记录。' : '添加买入、卖出、现金分红或红利再投资记录。';
+
+  useEffect(() => {
+    if (!usesNav || !tradeDate || isEditing) {
+      resetAutoNav();
+      setNavHint(null);
+      return;
+    }
+
+    fetchNav(fundCode, tradeDate, period);
+  }, [usesNav, tradeDate, period, isEditing, fundCode]);
+
+  useEffect(() => {
+    if (autoNavState.nav && !nav && !isEditing) {
+      setNav(String(autoNavState.nav));
+    }
+    if (autoNavState.effectiveDate) {
+      setNavHint(autoNavState.effectiveDate === tradeDate ? null : `净值日期: ${autoNavState.effectiveDate}`);
+    }
+  }, [autoNavState.nav, autoNavState.effectiveDate, nav, isEditing, tradeDate]);
 
   const getCurrentFormInput = (): TransactionFormInput => ({
     id: editingTransaction?.id,
@@ -289,7 +322,7 @@ export function AddTransactionDialog({
     }
 
     onAddTransaction(transaction);
-    resetForm({ setType, setTradeDate, setPeriod, setAmount, setNav, setFee });
+    resetForm({ setType, setTradeDate, setPeriod, setAmount, setNav, setFee, setNavHint, resetAutoNav });
     setFieldErrors({});
     setBusinessError(null);
     setOpen(false);
@@ -299,11 +332,13 @@ export function AddTransactionDialog({
     if (isEditing) {
       setFieldErrors({});
       setBusinessError(null);
+      setNavHint(null);
+      resetAutoNav();
       onCancelEdit?.();
       return;
     }
 
-    resetForm({ setType, setTradeDate, setPeriod, setAmount, setNav, setFee });
+    resetForm({ setType, setTradeDate, setPeriod, setAmount, setNav, setFee, setNavHint, resetAutoNav });
     setFieldErrors({});
     setBusinessError(null);
     setOpen(false);
@@ -323,7 +358,7 @@ export function AddTransactionDialog({
               return;
             }
 
-            resetForm({ setType, setTradeDate, setPeriod, setAmount, setNav, setFee });
+            resetForm({ setType, setTradeDate, setPeriod, setAmount, setNav, setFee, setNavHint, resetAutoNav });
             setFieldErrors({});
             setBusinessError(null);
             setOpen(true);
@@ -433,22 +468,31 @@ export function AddTransactionDialog({
           {usesNav ? (
             <label className="grid gap-1 text-sm text-slate-700">
               <span>净值</span>
-              <input
-                aria-invalid={fieldErrors.nav ? 'true' : 'false'}
-                className="rounded-lg border border-slate-300 px-3 py-2"
-                inputMode="decimal"
-                value={nav}
-                onChange={(event) => {
-                  const nextNav = event.target.value;
-                  setNav(nextNav);
-                  setBusinessError(null);
-                  syncFieldErrors({
-                    ...getCurrentFormInput(),
-                    nav: nextNav,
-                  });
-                }}
-              />
+              <div className="relative">
+                <input
+                  aria-invalid={fieldErrors.nav ? 'true' : 'false'}
+                  className="rounded-lg border border-slate-300 px-3 py-2 w-full"
+                  inputMode="decimal"
+                  value={nav}
+                  onChange={(event) => {
+                    const nextNav = event.target.value;
+                    setNav(nextNav);
+                    setBusinessError(null);
+                    syncFieldErrors({
+                      ...getCurrentFormInput(),
+                      nav: nextNav,
+                    });
+                  }}
+                />
+                {autoNavState.loading ? (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">
+                    获取中...
+                  </span>
+                ) : null}
+              </div>
               {fieldErrors.nav ? <p className="text-sm text-rose-600">{fieldErrors.nav}</p> : null}
+              {autoNavState.error ? <p className="text-sm text-amber-600">{autoNavState.error}</p> : null}
+              {navHint ? <p className="text-xs text-slate-500">{navHint}</p> : null}
             </label>
           ) : null}
 

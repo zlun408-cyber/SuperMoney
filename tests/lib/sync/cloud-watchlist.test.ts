@@ -1,278 +1,222 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import {
-  loadCloudWatchlist,
-  saveCloudWatchlist,
-  type CloudFundRecord,
-  type CloudSipPlanRecord,
-  type CloudTransactionRecord,
-  type CloudWatchlistClient,
-} from '@/lib/sync/cloud-watchlist';
+import { loadCloudWatchlist, saveCloudWatchlist, type CloudWatchlistClient } from '@/lib/sync/cloud-watchlist';
 import type { WatchlistFund } from '@/lib/storage/watchlist-storage';
 
-class FakeCloudWatchlistClient implements CloudWatchlistClient {
-  fundsToLoad: CloudFundRecord[] = [];
-  sipPlansToLoad: CloudSipPlanRecord[] = [];
-  transactionsToLoad: CloudTransactionRecord[] = [];
-  replacedFundsInput: Parameters<CloudWatchlistClient['replaceFunds']>[1] | null = null;
-  replacedSipPlansInput: Parameters<CloudWatchlistClient['replaceSipPlans']>[1] | null = null;
-  replacedTransactionsInput: Parameters<CloudWatchlistClient['replaceTransactions']>[1] | null = null;
-  replaceFundsResult: CloudFundRecord[] = [];
+describe('cloud-watchlist normalized transaction mapping', () => {
+  it('saves normalized transactions with trade date and confirmed nav', async () => {
+    const replaceTransactions = vi.fn().mockResolvedValue(undefined);
+    const replaceSipExecutions = vi.fn().mockResolvedValue(undefined);
+    const client: CloudWatchlistClient = {
+      listFunds: vi.fn(),
+      listTransactions: vi.fn(),
+      listSipPlans: vi.fn(),
+      listSipExecutions: vi.fn(),
+      replaceFunds: vi.fn().mockResolvedValue([
+        {
+          id: 'fund-1',
+          userId: 'user-1',
+          code: '000001',
+          name: '基金A',
+          createdAt: '2026-04-10T00:00:00.000Z',
+        },
+      ]),
+      replaceTransactions,
+      replaceSipPlans: vi.fn().mockResolvedValue(undefined),
+      replaceSipExecutions,
+    };
 
-  async listFunds() {
-    return this.fundsToLoad;
-  }
-
-  async listTransactions() {
-    return this.transactionsToLoad;
-  }
-
-  async listSipPlans() {
-    return this.sipPlansToLoad;
-  }
-
-  async replaceFunds(_userId: string, funds: Parameters<CloudWatchlistClient['replaceFunds']>[1]) {
-    this.replacedFundsInput = funds;
-    return this.replaceFundsResult;
-  }
-
-  async replaceTransactions(
-    _userId: string,
-    transactions: Parameters<CloudWatchlistClient['replaceTransactions']>[1],
-  ) {
-    this.replacedTransactionsInput = transactions;
-  }
-
-  async replaceSipPlans(_userId: string, sipPlans: Parameters<CloudWatchlistClient['replaceSipPlans']>[1]) {
-    this.replacedSipPlansInput = sipPlans;
-  }
-}
-
-describe('cloud watchlist helpers', () => {
-  it('loads watchlist funds and attaches matching transactions', async () => {
-    const client = new FakeCloudWatchlistClient();
-
-    client.fundsToLoad = [
+    const watchlist: WatchlistFund[] = [
       {
-        id: 'fund-1',
-        userId: 'user-1',
-        code: '161725',
-        name: '招商中证白酒指数',
-        createdAt: '2026-03-20T10:00:00.000Z',
-      },
-      {
-        id: 'fund-2',
-        userId: 'user-1',
-        code: '110011',
-        name: '易方达中小盘',
-        createdAt: '2026-03-21T10:00:00.000Z',
-      },
-    ];
-
-    client.transactionsToLoad = [
-      {
-        id: 'tx-2',
-        userId: 'user-1',
-        fundId: 'fund-1',
-        type: 'sell',
-        tradeDate: '2026-03-05',
-        shares: 100,
-        nav: 1.2,
-        fee: 1.5,
-        note: '部分卖出',
-        createdAt: '2026-03-05T10:00:00.000Z',
-        updatedAt: '2026-03-05T10:00:00.000Z',
-      },
-      {
-        id: 'tx-1',
-        userId: 'user-1',
-        fundId: 'fund-1',
-        type: 'buy',
-        tradeDate: '2026-03-01',
-        amount: 1000,
-        nav: 1,
-        createdAt: '2026-03-01T10:00:00.000Z',
-        updatedAt: '2026-03-01T10:00:00.000Z',
-      },
-      {
-        id: 'tx-3',
-        userId: 'user-1',
-        fundId: 'fund-missing',
-        type: 'cash_dividend',
-        tradeDate: '2026-03-10',
-        amount: 25,
-        createdAt: '2026-03-10T10:00:00.000Z',
-        updatedAt: '2026-03-10T10:00:00.000Z',
-      },
-    ];
-    client.sipPlansToLoad = [
-      {
-        id: 'sip-1',
-        userId: 'user-1',
-        fundId: 'fund-1',
-        name: '白酒定投',
-        amount: 500,
-        frequency: 'monthly',
-        startDate: '2026-04-01',
-        endDate: '2026-12-31',
-        executionTime: '14:30',
-        executionPeriod: 'before_1500',
-        status: 'active',
-        lastExecutedAt: '2026-04-01T14:30:00.000Z',
-        nextExecutionAt: '2026-05-01T14:30:00.000Z',
-        createdAt: '2026-03-30T10:00:00.000Z',
-        updatedAt: '2026-03-30T10:00:00.000Z',
-      },
-    ];
-
-    const watchlist = await loadCloudWatchlist(client, 'user-1');
-
-    expect(watchlist).toEqual<WatchlistFund[]>([
-      {
-        code: '161725',
-        name: '招商中证白酒指数',
+        code: '000001',
+        name: '基金A',
         transactions: [
           {
             id: 'tx-1',
             type: 'buy',
-            tradeDate: '2026-03-01',
-            amount: 1000,
-            nav: 1,
-          },
-          {
-            id: 'tx-2',
-            type: 'sell',
-            tradeDate: '2026-03-05',
-            shares: 100,
-            nav: 1.2,
-            fee: 1.5,
-            note: '部分卖出',
-          },
-        ],
-        sipPlans: [
-          {
-            id: 'sip-1',
-            name: '白酒定投',
-            amount: 500,
-            frequency: 'monthly',
-            startDate: '2026-04-01',
-            endDate: '2026-12-31',
-            executionTime: '14:30',
-            executionPeriod: 'before_1500',
-            status: 'active',
-            lastExecutedAt: '2026-04-01T14:30:00.000Z',
-            nextExecutionAt: '2026-05-01T14:30:00.000Z',
+            amount: 100,
+            confirmedNav: 1.2345,
+            placedDate: '2026-04-10',
+            placedPeriod: 'after_1500',
+            effectiveDate: '2026-04-11',
+            source: 'manual',
+            fee: 1.2,
           },
         ],
       },
+    ];
+
+    await saveCloudWatchlist(client, 'user-1', watchlist);
+
+    expect(replaceTransactions).toHaveBeenCalledWith('user-1', [
+      expect.objectContaining({
+        id: 'tx-1',
+        userId: 'user-1',
+        fundId: 'fund-1',
+        type: 'buy',
+        tradeDate: '2026-04-10',
+        nav: 1.2345,
+        amount: 100,
+        fee: 1.2,
+      }),
+    ]);
+    expect(replaceSipExecutions).toHaveBeenCalledWith('user-1', []);
+  });
+
+  it('loads cloud transactions back into normalized app shape', async () => {
+    const client: CloudWatchlistClient = {
+      listFunds: vi.fn().mockResolvedValue([
+        {
+          id: 'fund-1',
+          userId: 'user-1',
+          code: '000001',
+          name: '基金A',
+          createdAt: '2026-04-10T00:00:00.000Z',
+        },
+      ]),
+      listTransactions: vi.fn().mockResolvedValue([
+        {
+          id: 'tx-1',
+          userId: 'user-1',
+          fundId: 'fund-1',
+          type: 'buy',
+          tradeDate: '2026-04-10',
+          amount: 100,
+          nav: 1.2345,
+          fee: 1.2,
+          createdAt: '2026-04-10T00:00:00.000Z',
+          updatedAt: '2026-04-10T00:00:00.000Z',
+        },
+      ]),
+      listSipPlans: vi.fn().mockResolvedValue([]),
+      listSipExecutions: vi.fn().mockResolvedValue([]),
+      replaceFunds: vi.fn(),
+      replaceTransactions: vi.fn(),
+      replaceSipPlans: vi.fn(),
+      replaceSipExecutions: vi.fn(),
+    };
+
+    const watchlist = await loadCloudWatchlist(client, 'user-1');
+
+    expect(watchlist).toEqual([
       {
-        code: '110011',
-        name: '易方达中小盘',
-        transactions: [],
+        code: '000001',
+        name: '基金A',
+        transactions: [
+          {
+            id: 'tx-1',
+            type: 'buy',
+            amount: 100,
+            confirmedNav: 1.2345,
+            placedDate: '2026-04-10',
+            placedPeriod: 'before_1500',
+            effectiveDate: '2026-04-10',
+            source: 'manual',
+            fee: 1.2,
+          },
+        ],
         sipPlans: [],
+        sipExecutionRecords: [],
       },
     ]);
   });
 
-  it('replaces cloud funds and transactions when saving watchlist data', async () => {
-    const client = new FakeCloudWatchlistClient();
+  it('saves and loads SIP execution records', async () => {
+    const replaceSipExecutions = vi.fn().mockResolvedValue(undefined);
+    const client: CloudWatchlistClient = {
+      listFunds: vi.fn().mockResolvedValue([
+        {
+          id: 'fund-1',
+          userId: 'user-1',
+          code: '000001',
+          name: '基金A',
+          createdAt: '2026-04-10T00:00:00.000Z',
+        },
+      ]),
+      listTransactions: vi.fn().mockResolvedValue([]),
+      listSipPlans: vi.fn().mockResolvedValue([]),
+      listSipExecutions: vi.fn().mockResolvedValue([
+        {
+          id: 'exec-1',
+          userId: 'user-1',
+          fundId: 'fund-1',
+          planId: 'plan-1',
+          executionDate: '2026-04-10',
+          status: 'generated',
+          transactionId: 'tx-1',
+          generatedAt: '2026-04-10T10:00:00.000Z',
+          skippedAt: undefined,
+          skipReason: undefined,
+          createdAt: '2026-04-10T10:00:00.000Z',
+          updatedAt: '2026-04-10T10:00:00.000Z',
+        },
+      ]),
+      replaceFunds: vi.fn().mockResolvedValue([
+        {
+          id: 'fund-1',
+          userId: 'user-1',
+          code: '000001',
+          name: '基金A',
+          createdAt: '2026-04-10T00:00:00.000Z',
+        },
+      ]),
+      replaceTransactions: vi.fn().mockResolvedValue(undefined),
+      replaceSipPlans: vi.fn().mockResolvedValue(undefined),
+      replaceSipExecutions,
+    };
 
-    client.replaceFundsResult = [
+    const watchlistToSave: WatchlistFund[] = [
       {
-        id: 'cloud-fund-1',
-        userId: 'user-1',
-        code: '161725',
-        name: '招商中证白酒指数',
-        createdAt: '2026-03-20T10:00:00.000Z',
+        code: '000001',
+        name: '基金A',
+        sipExecutionRecords: [
+          {
+            id: 'exec-1',
+            planId: 'plan-1',
+            fundId: '000001',
+            executionDate: '2026-04-10',
+            status: 'generated',
+            transactionId: 'tx-1',
+            generatedAt: '2026-04-10T10:00:00.000Z',
+            createdAt: '2026-04-10T10:00:00.000Z',
+            updatedAt: '2026-04-10T10:00:00.000Z',
+          },
+        ],
       },
     ];
 
-    await saveCloudWatchlist(client, 'user-1', [
+    await saveCloudWatchlist(client, 'user-1', watchlistToSave);
+
+    expect(replaceSipExecutions).toHaveBeenCalledWith('user-1', [
+      expect.objectContaining({
+        id: 'exec-1',
+        userId: 'user-1',
+        fundId: 'fund-1',
+        planId: 'plan-1',
+        executionDate: '2026-04-10',
+        status: 'generated',
+        transactionId: 'tx-1',
+      }),
+    ]);
+
+    const watchlist = await loadCloudWatchlist(client, 'user-1');
+
+    expect(watchlist).toEqual([
       {
-        code: '161725',
-        name: '招商中证白酒指数',
-        position: {
-          amount: 5000,
-          cost: 4800,
-          shares: 5000,
-        },
-        transactions: [
-          {
-            id: 'buy-1',
-            type: 'buy',
-            tradeDate: '2026-03-01',
-            amount: 1000,
-            nav: 1,
-          },
-          {
-            id: 'dividend-1',
-            type: 'cash_dividend',
-            tradeDate: '2026-03-15',
-            amount: 18.8,
-            note: '现金分红',
-          },
+        code: '000001',
+        name: '基金A',
+        transactions: [],
+        sipPlans: [],
+        sipExecutionRecords: [
+          expect.objectContaining({
+            id: 'exec-1',
+            planId: 'plan-1',
+            fundId: '000001',
+            executionDate: '2026-04-10',
+            status: 'generated',
+            transactionId: 'tx-1',
+          }),
         ],
-        sipPlans: [
-          {
-            id: 'sip-1',
-            name: '白酒定投',
-            amount: 500,
-            frequency: 'monthly',
-            startDate: '2026-04-01',
-            endDate: '2026-12-31',
-            executionTime: '14:30',
-            executionPeriod: 'before_1500',
-            status: 'active',
-            lastExecutedAt: '2026-04-01T14:30:00.000Z',
-            nextExecutionAt: '2026-05-01T14:30:00.000Z',
-          },
-        ],
-      },
-    ]);
-
-    expect(client.replacedFundsInput).toEqual([
-      {
-        code: '161725',
-        name: '招商中证白酒指数',
-      },
-    ]);
-
-    expect(client.replacedTransactionsInput).toEqual([
-      {
-        id: 'buy-1',
-        userId: 'user-1',
-        fundId: 'cloud-fund-1',
-        type: 'buy',
-        tradeDate: '2026-03-01',
-        amount: 1000,
-        nav: 1,
-      },
-      {
-        id: 'dividend-1',
-        userId: 'user-1',
-        fundId: 'cloud-fund-1',
-        type: 'cash_dividend',
-        tradeDate: '2026-03-15',
-        amount: 18.8,
-        note: '现金分红',
-      },
-    ]);
-
-    expect(client.replacedSipPlansInput).toEqual([
-      {
-        id: 'sip-1',
-        userId: 'user-1',
-        fundId: 'cloud-fund-1',
-        name: '白酒定投',
-        amount: 500,
-        frequency: 'monthly',
-        startDate: '2026-04-01',
-        endDate: '2026-12-31',
-        executionTime: '14:30',
-        executionPeriod: 'before_1500',
-        status: 'active',
-        lastExecutedAt: '2026-04-01T14:30:00.000Z',
-        nextExecutionAt: '2026-05-01T14:30:00.000Z',
       },
     ]);
   });

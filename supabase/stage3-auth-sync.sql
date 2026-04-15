@@ -42,11 +42,30 @@ create table if not exists public.fund_sip_plans (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.fund_sip_executions (
+  id text primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  fund_id uuid not null references public.watchlist_funds(id) on delete cascade,
+  plan_id text not null,
+  execution_date date not null,
+  status text not null check (status in ('pending', 'generated', 'skipped')),
+  transaction_id text,
+  generated_at timestamptz,
+  skipped_at timestamptz,
+  skip_reason text check (skip_reason in ('deleted_generated_transaction')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, plan_id, execution_date)
+);
+
 create index if not exists watchlist_funds_user_id_idx on public.watchlist_funds(user_id);
 create index if not exists fund_transactions_user_id_idx on public.fund_transactions(user_id);
 create index if not exists fund_transactions_fund_id_idx on public.fund_transactions(fund_id);
 create index if not exists fund_sip_plans_user_id_idx on public.fund_sip_plans(user_id);
 create index if not exists fund_sip_plans_fund_id_idx on public.fund_sip_plans(fund_id);
+create index if not exists fund_sip_executions_user_id_idx on public.fund_sip_executions(user_id);
+create index if not exists fund_sip_executions_fund_id_idx on public.fund_sip_executions(fund_id);
+create index if not exists fund_sip_executions_status_idx on public.fund_sip_executions(user_id, status);
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -60,6 +79,7 @@ $$;
 
 drop trigger if exists fund_transactions_set_updated_at on public.fund_transactions;
 drop trigger if exists fund_sip_plans_set_updated_at on public.fund_sip_plans;
+drop trigger if exists fund_sip_executions_set_updated_at on public.fund_sip_executions;
 
 create trigger fund_transactions_set_updated_at
 before update on public.fund_transactions
@@ -71,9 +91,15 @@ before update on public.fund_sip_plans
 for each row
 execute function public.set_updated_at();
 
+create trigger fund_sip_executions_set_updated_at
+before update on public.fund_sip_executions
+for each row
+execute function public.set_updated_at();
+
 alter table public.watchlist_funds enable row level security;
 alter table public.fund_transactions enable row level security;
 alter table public.fund_sip_plans enable row level security;
+alter table public.fund_sip_executions enable row level security;
 
 drop policy if exists "watchlist_funds_select_own" on public.watchlist_funds;
 create policy "watchlist_funds_select_own"
@@ -129,6 +155,35 @@ with check (auth.uid() = user_id);
 drop policy if exists "fund_transactions_delete_own" on public.fund_transactions;
 create policy "fund_transactions_delete_own"
 on public.fund_transactions
+for delete
+to authenticated
+using (auth.uid() = user_id);
+
+drop policy if exists "fund_sip_executions_select_own" on public.fund_sip_executions;
+create policy "fund_sip_executions_select_own"
+on public.fund_sip_executions
+for select
+to authenticated
+using (auth.uid() = user_id);
+
+drop policy if exists "fund_sip_executions_insert_own" on public.fund_sip_executions;
+create policy "fund_sip_executions_insert_own"
+on public.fund_sip_executions
+for insert
+to authenticated
+with check (auth.uid() = user_id);
+
+drop policy if exists "fund_sip_executions_update_own" on public.fund_sip_executions;
+create policy "fund_sip_executions_update_own"
+on public.fund_sip_executions
+for update
+to authenticated
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+drop policy if exists "fund_sip_executions_delete_own" on public.fund_sip_executions;
+create policy "fund_sip_executions_delete_own"
+on public.fund_sip_executions
 for delete
 to authenticated
 using (auth.uid() = user_id);

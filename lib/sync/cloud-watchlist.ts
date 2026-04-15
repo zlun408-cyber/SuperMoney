@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import type { FundTransaction, SipPlan } from '@/lib/funds/types';
+import type { FundTransaction, SipExecutionRecord, SipPlan } from '@/lib/funds/types';
 import type { WatchlistFund } from '@/lib/storage/watchlist-storage';
 
 export interface CloudFundRecord {
@@ -65,6 +65,34 @@ export interface CloudSipPlanInput {
   nextExecutionAt?: string;
 }
 
+export interface CloudSipExecutionRecord {
+  id: string;
+  userId: string;
+  fundId: string;
+  planId: string;
+  executionDate: string;
+  status: SipExecutionRecord['status'];
+  transactionId?: string;
+  generatedAt?: string;
+  skippedAt?: string;
+  skipReason?: SipExecutionRecord['skipReason'];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CloudSipExecutionInput {
+  id: string;
+  userId: string;
+  fundId: string;
+  planId: string;
+  executionDate: string;
+  status: SipExecutionRecord['status'];
+  transactionId?: string;
+  generatedAt?: string;
+  skippedAt?: string;
+  skipReason?: SipExecutionRecord['skipReason'];
+}
+
 export interface CloudTransactionInput {
   id: string;
   userId: string;
@@ -82,9 +110,11 @@ export interface CloudWatchlistClient {
   listFunds(userId: string): Promise<CloudFundRecord[]>;
   listTransactions(userId: string): Promise<CloudTransactionRecord[]>;
   listSipPlans(userId: string): Promise<CloudSipPlanRecord[]>;
+  listSipExecutions(userId: string): Promise<CloudSipExecutionRecord[]>;
   replaceFunds(userId: string, funds: CloudFundInput[]): Promise<CloudFundRecord[]>;
   replaceTransactions(userId: string, transactions: CloudTransactionInput[]): Promise<void>;
   replaceSipPlans(userId: string, sipPlans: CloudSipPlanInput[]): Promise<void>;
+  replaceSipExecutions(userId: string, executions: CloudSipExecutionInput[]): Promise<void>;
 }
 
 export function createSupabaseCloudWatchlistClient(client: SupabaseClient): CloudWatchlistClient {
@@ -147,6 +177,10 @@ export function createSupabaseCloudWatchlistClient(client: SupabaseClient): Clou
         .order('created_at', { ascending: true });
 
       if (error) {
+        if (isMissingSipPlansTableError(error)) {
+          return [];
+        }
+
         throw error;
       }
 
@@ -166,6 +200,39 @@ export function createSupabaseCloudWatchlistClient(client: SupabaseClient): Clou
         nextExecutionAt: plan.next_execution_at ?? undefined,
         createdAt: plan.created_at,
         updatedAt: plan.updated_at,
+      }));
+    },
+    async listSipExecutions(userId) {
+      const { data, error } = await client
+        .from('fund_sip_executions')
+        .select(
+          'id, user_id, fund_id, plan_id, execution_date, status, transaction_id, generated_at, skipped_at, skip_reason, created_at, updated_at',
+        )
+        .eq('user_id', userId)
+        .order('execution_date', { ascending: true })
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        if (isMissingSipExecutionsTableError(error)) {
+          return [];
+        }
+
+        throw error;
+      }
+
+      return (data ?? []).map((execution) => ({
+        id: execution.id,
+        userId: execution.user_id,
+        fundId: execution.fund_id,
+        planId: execution.plan_id,
+        executionDate: execution.execution_date,
+        status: execution.status,
+        transactionId: execution.transaction_id ?? undefined,
+        generatedAt: execution.generated_at ?? undefined,
+        skippedAt: execution.skipped_at ?? undefined,
+        skipReason: execution.skip_reason ?? undefined,
+        createdAt: execution.created_at,
+        updatedAt: execution.updated_at,
       }));
     },
     async replaceFunds(userId, funds) {
@@ -261,6 +328,10 @@ export function createSupabaseCloudWatchlistClient(client: SupabaseClient): Clou
       const deleteResult = await client.from('fund_sip_plans').delete().eq('user_id', userId);
 
       if (deleteResult.error) {
+        if (isMissingSipPlansTableError(deleteResult.error)) {
+          return;
+        }
+
         throw deleteResult.error;
       }
 
@@ -287,26 +358,115 @@ export function createSupabaseCloudWatchlistClient(client: SupabaseClient): Clou
       );
 
       if (insertResult.error) {
+        if (isMissingSipPlansTableError(insertResult.error)) {
+          return;
+        }
+
+        throw insertResult.error;
+      }
+    },
+    async replaceSipExecutions(userId, executions) {
+      const deleteResult = await client.from('fund_sip_executions').delete().eq('user_id', userId);
+
+      if (deleteResult.error) {
+        if (isMissingSipExecutionsTableError(deleteResult.error)) {
+          return;
+        }
+
+        throw deleteResult.error;
+      }
+
+      if (executions.length === 0) {
+        return;
+      }
+
+      const insertResult = await client.from('fund_sip_executions').insert(
+        executions.map((execution) => ({
+          id: execution.id,
+          user_id: execution.userId,
+          fund_id: execution.fundId,
+          plan_id: execution.planId,
+          execution_date: execution.executionDate,
+          status: execution.status,
+          transaction_id: execution.transactionId ?? null,
+          generated_at: execution.generatedAt ?? null,
+          skipped_at: execution.skippedAt ?? null,
+          skip_reason: execution.skipReason ?? null,
+        })),
+      );
+
+      if (insertResult.error) {
+        if (isMissingSipExecutionsTableError(insertResult.error)) {
+          return;
+        }
+
         throw insertResult.error;
       }
     },
   };
 }
 
+function isMissingSipPlansTableError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const code = 'code' in error ? error.code : undefined;
+  const message = 'message' in error ? error.message : undefined;
+
+  return code === 'PGRST205' && typeof message === 'string' && message.includes('fund_sip_plans');
+}
+
+function isMissingSipExecutionsTableError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const code = 'code' in error ? error.code : undefined;
+  const message = 'message' in error ? error.message : undefined;
+
+  return code === 'PGRST205' && typeof message === 'string' && message.includes('fund_sip_executions');
+}
+
 export async function loadCloudWatchlist(
   client: CloudWatchlistClient,
   userId: string,
 ): Promise<WatchlistFund[]> {
-  const [funds, transactions, sipPlans] = await Promise.all([
+  const [funds, transactions, sipPlansResult, sipExecutionsResult] = await Promise.allSettled([
     client.listFunds(userId),
     client.listTransactions(userId),
     client.listSipPlans(userId),
+    client.listSipExecutions(userId),
   ]);
+
+  if (funds.status === 'rejected') {
+    throw funds.reason;
+  }
+
+  if (transactions.status === 'rejected') {
+    throw transactions.reason;
+  }
+
+  if (sipPlansResult.status === 'rejected' && !isMissingSipPlansTableError(sipPlansResult.reason)) {
+    throw sipPlansResult.reason;
+  }
+
+  if (
+    sipExecutionsResult.status === 'rejected' &&
+    !isMissingSipExecutionsTableError(sipExecutionsResult.reason)
+  ) {
+    throw sipExecutionsResult.reason;
+  }
+
+  const sipPlans = sipPlansResult.status === 'fulfilled' ? sipPlansResult.value : [];
+  const sipExecutions = sipExecutionsResult.status === 'fulfilled' ? sipExecutionsResult.value : [];
+  const settledTransactions = transactions.value;
 
   const transactionsByFundId = new Map<string, FundTransaction[]>();
   const sipPlansByFundId = new Map<string, SipPlan[]>();
+  const sipExecutionRecordsByFundId = new Map<string, CloudSipExecutionRecord[]>();
 
-  for (const transaction of transactions) {
+  for (const transaction of settledTransactions) {
     const mappedTransaction = mapCloudTransactionToFundTransaction(transaction);
 
     if (!mappedTransaction) {
@@ -324,11 +484,20 @@ export async function loadCloudWatchlist(
     sipPlansByFundId.set(sipPlan.fundId, fundPlans);
   }
 
-  return funds.map((fund) => ({
+  for (const sipExecution of sipExecutions) {
+    const fundExecutions = sipExecutionRecordsByFundId.get(sipExecution.fundId) ?? [];
+    fundExecutions.push(sipExecution);
+    sipExecutionRecordsByFundId.set(sipExecution.fundId, fundExecutions);
+  }
+
+  return funds.value.map((fund) => ({
     code: fund.code,
     name: fund.name,
     transactions: (transactionsByFundId.get(fund.id) ?? []).sort(compareTransactions),
     sipPlans: sipPlansByFundId.get(fund.id) ?? [],
+    sipExecutionRecords: (sipExecutionRecordsByFundId.get(fund.id) ?? []).map((execution) =>
+      mapCloudSipExecutionToSipExecution(execution, fund.code),
+    ),
   }));
 }
 
@@ -348,6 +517,7 @@ export async function saveCloudWatchlist(
   const fundIdByCode = new Map(savedFunds.map((fund) => [fund.code, fund.id]));
   const transactionRows: CloudTransactionInput[] = [];
   const sipPlanRows: CloudSipPlanInput[] = [];
+  const sipExecutionRows: CloudSipExecutionInput[] = [];
 
   for (const fund of watchlist) {
     const fundId = fundIdByCode.get(fund.code);
@@ -357,24 +527,7 @@ export async function saveCloudWatchlist(
     }
 
     for (const transaction of fund.transactions ?? []) {
-      const row: Record<string, unknown> = {
-        id: transaction.id,
-        userId,
-        fundId,
-        type: transaction.type,
-      };
-      if ('tradeDate' in transaction) {
-        row.tradeDate = (transaction as { tradeDate: string }).tradeDate;
-      }
-      if ('placedDate' in transaction) {
-        row.placedDate = (transaction as { placedDate: string }).placedDate;
-      }
-      if ('amount' in transaction) row.amount = transaction.amount;
-      if ('shares' in transaction) row.shares = transaction.shares;
-      if ('nav' in transaction) row.nav = (transaction as { nav: number }).nav;
-      if (transaction.fee !== undefined) row.fee = transaction.fee;
-      if (transaction.note) row.note = transaction.note;
-      transactionRows.push(row as unknown as typeof transactionRows[number]);
+      transactionRows.push(mapFundTransactionToCloudTransactionInput(transaction, userId, fundId));
     }
 
     for (const sipPlan of fund.sipPlans ?? []) {
@@ -394,10 +547,26 @@ export async function saveCloudWatchlist(
         nextExecutionAt: sipPlan.nextExecutionAt,
       });
     }
+
+    for (const execution of fund.sipExecutionRecords ?? []) {
+      sipExecutionRows.push({
+        id: execution.id,
+        userId,
+        fundId,
+        planId: execution.planId,
+        executionDate: execution.executionDate,
+        status: execution.status,
+        transactionId: execution.transactionId,
+        generatedAt: execution.generatedAt,
+        skippedAt: execution.skippedAt,
+        skipReason: execution.skipReason,
+      });
+    }
   }
 
   await client.replaceTransactions(userId, transactionRows);
   await client.replaceSipPlans(userId, sipPlanRows);
+  await client.replaceSipExecutions(userId, sipExecutionRows);
 }
 
 function mapCloudSipPlanToSipPlan(plan: CloudSipPlanRecord): SipPlan {
@@ -419,7 +588,10 @@ function mapCloudSipPlanToSipPlan(plan: CloudSipPlanRecord): SipPlan {
 function mapCloudTransactionToFundTransaction(transaction: CloudTransactionRecord): FundTransaction | null {
   const baseFields = {
     id: transaction.id,
-    tradeDate: transaction.tradeDate,
+    placedDate: transaction.tradeDate,
+    placedPeriod: 'before_1500' as const,
+    effectiveDate: transaction.tradeDate,
+    source: 'manual' as const,
     ...(transaction.fee !== undefined ? { fee: transaction.fee } : {}),
     ...(transaction.note ? { note: transaction.note } : {}),
   };
@@ -434,7 +606,7 @@ function mapCloudTransactionToFundTransaction(transaction: CloudTransactionRecor
         ...baseFields,
         type: 'buy',
         amount: transaction.amount,
-        nav: transaction.nav,
+        confirmedNav: transaction.nav,
       };
     case 'sell':
       if (transaction.shares === undefined || transaction.nav === undefined) {
@@ -445,7 +617,7 @@ function mapCloudTransactionToFundTransaction(transaction: CloudTransactionRecor
         ...baseFields,
         type: 'sell',
         shares: transaction.shares,
-        nav: transaction.nav,
+        confirmedNav: transaction.nav,
       };
     case 'cash_dividend':
       if (transaction.amount === undefined) {
@@ -466,11 +638,52 @@ function mapCloudTransactionToFundTransaction(transaction: CloudTransactionRecor
         ...baseFields,
         type: 'reinvest_dividend',
         amount: transaction.amount,
-        nav: transaction.nav,
+        confirmedNav: transaction.nav,
       };
     default:
       return null;
   }
+}
+
+function mapCloudSipExecutionToSipExecution(
+  execution: CloudSipExecutionRecord,
+  fundCode: string,
+): SipExecutionRecord {
+  return {
+    id: execution.id,
+    planId: execution.planId,
+    fundId: fundCode,
+    executionDate: execution.executionDate,
+    status: execution.status,
+    transactionId: execution.transactionId,
+    generatedAt: execution.generatedAt,
+    skippedAt: execution.skippedAt,
+    skipReason: execution.skipReason,
+    createdAt: execution.createdAt,
+    updatedAt: execution.updatedAt,
+  };
+}
+
+function mapFundTransactionToCloudTransactionInput(
+  transaction: FundTransaction,
+  userId: string,
+  fundId: string,
+): CloudTransactionInput {
+  const tradeDate = 'placedDate' in transaction ? transaction.placedDate : transaction.tradeDate;
+  const nav = 'confirmedNav' in transaction ? transaction.confirmedNav : 'nav' in transaction ? transaction.nav : undefined;
+
+  return {
+    id: transaction.id,
+    userId,
+    fundId,
+    type: transaction.type,
+    tradeDate,
+    amount: 'amount' in transaction ? transaction.amount : undefined,
+    shares: 'shares' in transaction ? transaction.shares : undefined,
+    nav,
+    fee: transaction.fee,
+    note: transaction.note,
+  };
 }
 
 function compareTransactions(left: FundTransaction, right: FundTransaction): number {

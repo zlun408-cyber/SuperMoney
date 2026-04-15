@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import React, { useMemo, useState } from 'react';
 
 import { useAuthSession } from '@/lib/auth/auth-context';
@@ -40,6 +41,11 @@ export default function HomePage() {
           <p className="text-sm font-medium text-emerald-600">SuperFinance</p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">基金实时估值监控</h1>
           <p className="mt-2 text-slate-600">先聚焦自选基金列表，分钟级查看估值、持仓与估算盈亏。</p>
+          <p className="mt-2 text-sm text-slate-500">
+            <Link className="transition hover:text-slate-700 hover:underline" href="/accuracy">
+              查看估值准确度看板
+            </Link>
+          </p>
         </div>
         <div className="flex gap-3">
           <AddFundDialog onAddFund={addFund} existingCodes={watchlist.map((fund) => fund.code)} />

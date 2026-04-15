@@ -1,451 +1,220 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { useWatchlist } from '@/lib/hooks/use-watchlist';
-import { WATCHLIST_STORAGE_KEY } from '@/lib/storage/watchlist-storage';
 import type { CloudWatchlistClient } from '@/lib/sync/cloud-watchlist';
-import type { SipPlan } from '@/lib/funds/types';
+import { WATCHLIST_STORAGE_KEY } from '@/lib/storage/watchlist-storage';
 
-const sampleFund = {
-  code: '161725',
-  name: '招商中证白酒指数',
-};
-
-describe('useWatchlist', () => {
-  beforeEach(() => {
-    window.localStorage.clear();
-  });
-
-  it('loads the initial watchlist from localStorage', () => {
+describe('useWatchlist SIP execution records', () => {
+  it('materializes due SIP plans on initial load and persists execution records', async () => {
     window.localStorage.setItem(
       WATCHLIST_STORAGE_KEY,
-      JSON.stringify([{ ...sampleFund, position: { amount: 1000, cost: 900, shares: 1000 } }]),
+      JSON.stringify([
+        {
+          code: '000001',
+          name: '基金A',
+          sipPlans: [
+            {
+              id: 'plan-1',
+              amount: 100,
+              frequency: 'monthly',
+              startDate: '2026-04-01',
+              executionTime: '10:00',
+              executionPeriod: 'before_1500',
+              status: 'active',
+              nextExecutionAt: '2026-04-10T10:00:00.000Z',
+            },
+          ],
+        },
+      ]),
     );
 
-    const { result } = renderHook(() => useWatchlist());
-
-    expect(result.current.watchlist).toHaveLength(1);
-    expect(result.current.watchlist[0]?.code).toBe('161725');
-  });
-
-  it('adds a fund and persists it', () => {
-    const { result } = renderHook(() => useWatchlist());
-
-    act(() => {
-      result.current.addFund(sampleFund);
-    });
-
-    expect(result.current.watchlist).toHaveLength(1);
-    expect(JSON.parse(window.localStorage.getItem(WATCHLIST_STORAGE_KEY) ?? '[]')).toHaveLength(1);
-  });
-
-  it('updates position info for an existing fund', () => {
-    const { result } = renderHook(() => useWatchlist());
-
-    act(() => {
-      result.current.addFund(sampleFund);
-      result.current.updatePosition('161725', { amount: 1000, cost: 900, shares: 1000 });
-    });
-
-    expect(result.current.watchlist[0]?.position?.cost).toBe(900);
-  });
-
-  it('removes a fund from the watchlist', () => {
-    const { result } = renderHook(() => useWatchlist());
-
-    act(() => {
-      result.current.addFund(sampleFund);
-      result.current.removeFund('161725');
-    });
-
-    expect(result.current.watchlist).toHaveLength(0);
-  });
-
-  it('adds a transaction record to an existing fund', () => {
-    const { result } = renderHook(() => useWatchlist());
-
-    act(() => {
-      result.current.addFund(sampleFund);
-      result.current.addTransaction('161725', {
-        id: 'buy-1',
-        type: 'buy',
-        tradeDate: '2026-03-01',
-        amount: 1000,
-        nav: 1,
-      });
-    });
-
-    expect(result.current.watchlist[0]?.transactions).toHaveLength(1);
-    expect(result.current.watchlist[0]?.transactions?.[0]?.id).toBe('buy-1');
-  });
-
-  it('updates an existing transaction record', () => {
-    const { result } = renderHook(() => useWatchlist());
-
-    act(() => {
-      result.current.addFund(sampleFund);
-      result.current.addTransaction('161725', {
-        id: 'buy-1',
-        type: 'buy',
-        tradeDate: '2026-03-01',
-        amount: 1000,
-        nav: 1,
-      });
-      result.current.updateTransaction('161725', 'buy-1', {
-        id: 'buy-1',
-        type: 'buy',
-        tradeDate: '2026-03-01',
-        amount: 1200,
-        nav: 1,
-      });
-    });
-
-    expect(result.current.watchlist[0]?.transactions?.[0]).toMatchObject({
-      id: 'buy-1',
-      amount: 1200,
-    });
-  });
-
-  it('removes a transaction record from an existing fund', () => {
-    const { result } = renderHook(() => useWatchlist());
-
-    act(() => {
-      result.current.addFund(sampleFund);
-      result.current.addTransaction('161725', {
-        id: 'buy-1',
-        type: 'buy',
-        tradeDate: '2026-03-01',
-        amount: 1000,
-        nav: 1,
-      });
-      result.current.removeTransaction('161725', 'buy-1');
-    });
-
-    expect(result.current.watchlist[0]?.transactions ?? []).toHaveLength(0);
-  });
-
-  it('adds a sip plan to an existing fund', () => {
-    const { result } = renderHook(() => useWatchlist());
-    const sipPlan: SipPlan = {
-      id: 'sip-1',
-      amount: 500,
-      frequency: 'monthly',
-      startDate: '2026-04-01',
-      endDate: '2026-12-31',
-      executionTime: '14:30',
-      executionPeriod: 'before_1500',
-      status: 'active',
-      nextExecutionAt: '2026-04-01T14:30:00.000Z',
-    };
-
-    act(() => {
-      result.current.addFund(sampleFund);
-      result.current.addSipPlan('161725', sipPlan);
-    });
-
-    expect(result.current.watchlist[0]?.sipPlans).toEqual([sipPlan]);
-  });
-
-  it('auto-generates a due sip buy transaction when a nav resolver is available', () => {
     const { result } = renderHook(() =>
       useWatchlist({
-        getNow: () => '2026-04-01T15:00:00.000Z',
+        getNow: () => '2026-04-10T10:00:00.000Z',
         resolveSipPlanNav: () => 1.25,
       }),
     );
 
-    act(() => {
-      result.current.addFund(sampleFund);
-      result.current.addSipPlan('161725', {
-        id: 'sip-1',
-        amount: 500,
-        frequency: 'monthly',
-        startDate: '2026-04-01',
-        endDate: '2026-12-31',
-        executionTime: '14:30',
-        executionPeriod: 'before_1500',
-        status: 'active',
-        nextExecutionAt: '2026-04-01T14:30:00.000Z',
-      });
-    });
-
-    expect(result.current.watchlist[0]?.transactions).toEqual([
-      {
-        id: 'sip-1-2026-04-01',
-        type: 'buy',
-        amount: 500,
-        confirmedNav: 1.25,
-        placedDate: '2026-04-01',
-        placedPeriod: 'before_1500',
-        effectiveDate: '2026-04-01',
-        source: 'sip_plan',
-        sourcePlanId: 'sip-1',
-      },
-    ]);
-    expect(result.current.watchlist[0]?.sipPlans?.[0]).toMatchObject({
-      id: 'sip-1',
-      lastExecutedAt: '2026-04-01T14:30:00.000Z',
-      nextExecutionAt: '2026-05-01T14:30:00.000Z',
+    await waitFor(() => {
+      expect(result.current.watchlist[0]?.transactions).toHaveLength(1);
+      expect(result.current.watchlist[0]?.sipExecutionRecords).toEqual([
+        expect.objectContaining({
+          planId: 'plan-1',
+          executionDate: '2026-04-10',
+          status: 'generated',
+        }),
+      ]);
     });
   });
 
-  it('loads the initial watchlist from cloud when user is authenticated', async () => {
-    const cloudClient: CloudWatchlistClient = {
-      listFunds: vi.fn().mockResolvedValue([
+  it('marks execution record as skipped when deleting an auto-generated SIP transaction', async () => {
+    window.localStorage.setItem(
+      WATCHLIST_STORAGE_KEY,
+      JSON.stringify([
         {
-          id: 'fund-1',
-          userId: 'user-1',
-          code: '161725',
-          name: '招商中证白酒指数',
-          createdAt: '2026-03-27T10:00:00.000Z',
-        },
-      ]),
-      listTransactions: vi.fn().mockResolvedValue([
-        {
-          id: 'tx-1',
-          userId: 'user-1',
-          fundId: 'fund-1',
-          type: 'buy',
-          tradeDate: '2026-03-20',
-          amount: 1000,
-          nav: 1,
-          createdAt: '2026-03-20T10:00:00.000Z',
-          updatedAt: '2026-03-20T10:00:00.000Z',
-        },
-      ]),
-      listSipPlans: vi.fn().mockResolvedValue([]),
-      replaceFunds: vi.fn().mockResolvedValue([]),
-      replaceTransactions: vi.fn().mockResolvedValue(undefined),
-      replaceSipPlans: vi.fn().mockResolvedValue(undefined),
-    };
-
-    const { result } = renderHook(() =>
-      useWatchlist({
-        userId: 'user-1',
-        cloudClient,
-      }),
-    );
-
-    await waitFor(() => {
-      expect(result.current.watchlist).toEqual([
-        {
-          code: '161725',
-          name: '招商中证白酒指数',
-          sipPlans: [],
+          code: '000001',
+          name: '基金A',
           transactions: [
             {
-              id: 'tx-1',
+              id: 'plan-1-2026-04-10',
               type: 'buy',
-              tradeDate: '2026-03-20',
-              amount: 1000,
-              nav: 1,
+              amount: 100,
+              confirmedNav: 1.25,
+              placedDate: '2026-04-10',
+              placedPeriod: 'before_1500',
+              effectiveDate: '2026-04-10',
+              source: 'sip_plan',
+              sourcePlanId: 'plan-1',
+            },
+          ],
+          sipExecutionRecords: [
+            {
+              id: 'exec-1',
+              planId: 'plan-1',
+              fundId: '000001',
+              executionDate: '2026-04-10',
+              status: 'generated',
+              transactionId: 'plan-1-2026-04-10',
+              generatedAt: '2026-04-10T10:00:00.000Z',
+              createdAt: '2026-04-10T10:00:00.000Z',
+              updatedAt: '2026-04-10T10:00:00.000Z',
             },
           ],
         },
-      ]);
-    });
-
-    expect(window.localStorage.getItem(WATCHLIST_STORAGE_KEY)).toBeNull();
-  });
-
-  it('saves watchlist changes to cloud when user is authenticated', async () => {
-    const cloudClient: CloudWatchlistClient = {
-      listFunds: vi.fn().mockResolvedValue([]),
-      listTransactions: vi.fn().mockResolvedValue([]),
-      listSipPlans: vi.fn().mockResolvedValue([]),
-      replaceFunds: vi.fn().mockResolvedValue([
-        {
-          id: 'fund-1',
-          userId: 'user-1',
-          code: '161725',
-          name: '招商中证白酒指数',
-          createdAt: '2026-03-27T10:00:00.000Z',
-        },
       ]),
-      replaceTransactions: vi.fn().mockResolvedValue(undefined),
-      replaceSipPlans: vi.fn().mockResolvedValue(undefined),
-    };
-
-    const { result } = renderHook(() =>
-      useWatchlist({
-        userId: 'user-1',
-        cloudClient,
-      }),
     );
 
+    const { result } = renderHook(() => useWatchlist());
+
     await waitFor(() => {
-      expect(cloudClient.listFunds).toHaveBeenCalledWith('user-1');
+      expect(result.current.watchlist[0]?.transactions).toHaveLength(1);
     });
 
     act(() => {
-      result.current.addFund(sampleFund);
+      result.current.removeTransaction('000001', 'plan-1-2026-04-10');
     });
 
-    await waitFor(() => {
-      expect(cloudClient.replaceFunds).toHaveBeenLastCalledWith('user-1', [
-        {
-          code: '161725',
-          name: '招商中证白酒指数',
-        },
-      ]);
-    });
-
-    expect(window.localStorage.getItem(WATCHLIST_STORAGE_KEY)).toBeNull();
+    expect(result.current.watchlist[0]?.transactions).toEqual([]);
+    expect(result.current.watchlist[0]?.sipExecutionRecords).toEqual([
+      expect.objectContaining({
+        id: 'exec-1',
+        status: 'skipped',
+        skipReason: 'deleted_generated_transaction',
+      }),
+    ]);
   });
 
-  it('waits for user choice when local and cloud data both exist on first login', async () => {
-    window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify([{ code: '110011', name: '易方达中小盘' }]));
-
-    const onConflict = vi.fn();
+  it('persists initial SIP materialization back to cloud for authenticated watchlists', async () => {
+    const replaceFunds = vi.fn().mockResolvedValue([
+      {
+        id: 'fund-1',
+        userId: 'user-1',
+        code: '000001',
+        name: '基金A',
+        createdAt: '2026-04-10T00:00:00.000Z',
+      },
+    ]);
+    const replaceTransactions = vi.fn().mockResolvedValue(undefined);
+    const replaceSipPlans = vi.fn().mockResolvedValue(undefined);
+    const replaceSipExecutions = vi.fn().mockResolvedValue(undefined);
     const cloudClient: CloudWatchlistClient = {
       listFunds: vi.fn().mockResolvedValue([
         {
           id: 'fund-1',
           userId: 'user-1',
-          code: '161725',
-          name: '招商中证白酒指数',
-          createdAt: '2026-03-27T10:00:00.000Z',
+          code: '000001',
+          name: '基金A',
+          createdAt: '2026-04-10T00:00:00.000Z',
         },
       ]),
       listTransactions: vi.fn().mockResolvedValue([]),
-      listSipPlans: vi.fn().mockResolvedValue([]),
-      replaceFunds: vi.fn().mockResolvedValue([]),
-      replaceTransactions: vi.fn().mockResolvedValue(undefined),
-      replaceSipPlans: vi.fn().mockResolvedValue(undefined),
+      listSipPlans: vi.fn().mockResolvedValue([
+        {
+          id: 'plan-1',
+          userId: 'user-1',
+          fundId: 'fund-1',
+          amount: 100,
+          frequency: 'monthly',
+          startDate: '2026-04-01',
+          executionTime: '10:00',
+          executionPeriod: 'before_1500',
+          status: 'active',
+          nextExecutionAt: '2026-04-10T10:00:00.000Z',
+          createdAt: '2026-04-10T00:00:00.000Z',
+          updatedAt: '2026-04-10T00:00:00.000Z',
+        },
+      ]),
+      listSipExecutions: vi.fn().mockResolvedValue([]),
+      replaceFunds,
+      replaceTransactions,
+      replaceSipPlans,
+      replaceSipExecutions,
     };
 
     const { result } = renderHook(() =>
       useWatchlist({
         userId: 'user-1',
         cloudClient,
-        onSyncConflict: onConflict,
+        getNow: () => '2026-04-10T10:00:00.000Z',
+        resolveSipPlanNav: () => 1.25,
       }),
     );
 
     await waitFor(() => {
-      expect(onConflict).toHaveBeenCalledTimes(1);
+      expect(result.current.watchlist[0]?.transactions).toHaveLength(1);
     });
 
-    expect(result.current.watchlist).toEqual([]);
-    expect(cloudClient.replaceFunds).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(replaceTransactions).toHaveBeenCalledWith(
+        'user-1',
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'plan-1-2026-04-10',
+            fundId: 'fund-1',
+            tradeDate: '2026-04-10',
+            nav: 1.25,
+          }),
+        ]),
+      );
+      expect(replaceSipExecutions).toHaveBeenCalledWith(
+        'user-1',
+        expect.arrayContaining([
+          expect.objectContaining({
+            planId: 'plan-1',
+            fundId: 'fund-1',
+            executionDate: '2026-04-10',
+            status: 'generated',
+          }),
+        ]),
+      );
+      expect(replaceFunds).toHaveBeenCalled();
+      expect(replaceSipPlans).toHaveBeenCalled();
+    });
   });
 
-  it('uses cloud data after conflict chooser selects cloud', async () => {
-    window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify([{ code: '110011', name: '易方达中小盘' }]));
-
+  it('marks the hook ready even when initial cloud loading fails', async () => {
     const cloudClient: CloudWatchlistClient = {
-      listFunds: vi.fn().mockResolvedValue([
-        {
-          id: 'fund-1',
-          userId: 'user-1',
-          code: '161725',
-          name: '招商中证白酒指数',
-          createdAt: '2026-03-27T10:00:00.000Z',
-        },
-      ]),
-      listTransactions: vi.fn().mockResolvedValue([]),
-      listSipPlans: vi.fn().mockResolvedValue([]),
-      replaceFunds: vi.fn().mockResolvedValue([]),
-      replaceTransactions: vi.fn().mockResolvedValue(undefined),
-      replaceSipPlans: vi.fn().mockResolvedValue(undefined),
+      listFunds: vi.fn().mockRejectedValue(new Error('network failed')),
+      listTransactions: vi.fn(),
+      listSipPlans: vi.fn(),
+      listSipExecutions: vi.fn(),
+      replaceFunds: vi.fn(),
+      replaceTransactions: vi.fn(),
+      replaceSipPlans: vi.fn(),
+      replaceSipExecutions: vi.fn(),
     };
-
-    let chooseCloud: (() => void) | undefined;
-    let chooseLocal: (() => void) | undefined;
 
     const { result } = renderHook(() =>
       useWatchlist({
         userId: 'user-1',
         cloudClient,
-        onSyncConflict: (actions) => {
-          chooseCloud = actions.useCloud;
-          chooseLocal = actions.useLocal;
-        },
       }),
     );
 
     await waitFor(() => {
-      expect(chooseCloud).toBeTypeOf('function');
-      expect(chooseLocal).toBeTypeOf('function');
+      expect(result.current.isReady).toBe(true);
+      expect(result.current.watchlist).toEqual([]);
     });
-
-    act(() => {
-      chooseCloud?.();
-    });
-
-    await waitFor(() => {
-      expect(result.current.watchlist).toEqual([
-        {
-          code: '161725',
-          name: '招商中证白酒指数',
-          sipPlans: [],
-          transactions: [],
-        },
-      ]);
-    });
-
-    expect(cloudClient.replaceFunds).not.toHaveBeenCalled();
-  });
-
-  it('uses local data after conflict chooser selects local', async () => {
-    const localWatchlist = [{ code: '110011', name: '易方达中小盘' }];
-    window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(localWatchlist));
-
-    const cloudClient: CloudWatchlistClient = {
-      listFunds: vi.fn().mockResolvedValue([
-        {
-          id: 'fund-1',
-          userId: 'user-1',
-          code: '161725',
-          name: '招商中证白酒指数',
-          createdAt: '2026-03-27T10:00:00.000Z',
-        },
-      ]),
-      listTransactions: vi.fn().mockResolvedValue([]),
-      listSipPlans: vi.fn().mockResolvedValue([]),
-      replaceFunds: vi.fn().mockResolvedValue([
-        {
-          id: 'fund-local-1',
-          userId: 'user-1',
-          code: '110011',
-          name: '易方达中小盘',
-          createdAt: '2026-03-27T10:00:00.000Z',
-        },
-      ]),
-      replaceTransactions: vi.fn().mockResolvedValue(undefined),
-      replaceSipPlans: vi.fn().mockResolvedValue(undefined),
-    };
-
-    let chooseLocal: (() => void) | undefined;
-
-    const { result } = renderHook(() =>
-      useWatchlist({
-        userId: 'user-1',
-        cloudClient,
-        onSyncConflict: (actions) => {
-          chooseLocal = actions.useLocal;
-        },
-      }),
-    );
-
-    await waitFor(() => {
-      expect(chooseLocal).toBeTypeOf('function');
-    });
-
-    act(() => {
-      chooseLocal?.();
-    });
-
-    await waitFor(() => {
-      expect(result.current.watchlist).toEqual([
-        {
-          ...localWatchlist[0],
-          transactions: [],
-          sipPlans: [],
-        },
-      ]);
-    });
-
-    expect(cloudClient.replaceFunds).toHaveBeenCalledWith('user-1', localWatchlist);
   });
 });

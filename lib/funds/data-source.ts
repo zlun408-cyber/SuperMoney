@@ -27,6 +27,66 @@ export async function fetchFundEstimateScript(code: string): Promise<string> {
   return await response.text();
 }
 
+export interface FundHistoryNavPayload {
+  fundCode: string;
+  date: string;
+  dwjz: string;
+}
+
+export async function fetchFundHistoryNavScript(code: string, startDate: string, endDate: string): Promise<string> {
+  const url = `https://fund.eastmoney.com/f10/F10DataApi.aspx?type=lsjz&code=${code}&page=1&sdate=${startDate}&edate=${endDate}&per=20`;
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch fund history nav script: ${code}`);
+  }
+
+  return await response.text();
+}
+
+export function extractHistoryNavPayload(script: string, targetDate: string): FundHistoryNavPayload | null {
+  const dateRegex = new RegExp(`<td>${targetDate}</td>\\s*<td[^>]*class="(?:wbg)?">([^<]+)</td>`, 'i');
+  const match = script.match(dateRegex);
+
+  if (!match || !match[1]) {
+    return null;
+  }
+
+  const navValue = match[1].trim();
+  const nav = parseFloat(navValue);
+
+  if (!Number.isFinite(nav)) {
+    return null;
+  }
+
+  const codeMatch = script.match(/code:\s*['"](\d+)['"]/);
+  const fundCode = codeMatch ? codeMatch[1] : '';
+
+  return {
+    fundCode,
+    date: targetDate,
+    dwjz: navValue,
+  };
+}
+
+export async function fetchHistoricalNav(code: string, date: string): Promise<number | null> {
+  const endDate = date;
+  const startDate = date;
+  
+  try {
+    const script = await fetchFundHistoryNavScript(code, startDate, endDate);
+    const payload = extractHistoryNavPayload(script, date);
+    
+    if (!payload) {
+      return null;
+    }
+    
+    return parseFloat(payload.dwjz);
+  } catch {
+    return null;
+  }
+}
+
 export function extractEstimatePayload(script: string): FundEstimatePayload {
   const match = script.match(/^jsonpgz\(([\s\S]*)\);?$/);
 

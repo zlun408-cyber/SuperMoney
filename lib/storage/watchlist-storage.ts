@@ -3,6 +3,7 @@ import type {
   LegacyFundTransaction,
   NormalizedFundTransaction,
   PositionInput,
+  SipExecutionRecord,
   SipPlan,
 } from '@/lib/funds/types';
 
@@ -14,6 +15,7 @@ export interface WatchlistFund {
   position?: PositionInput;
   transactions?: FundTransaction[];
   sipPlans?: SipPlan[];
+  sipExecutionRecords?: SipExecutionRecord[];
 }
 
 function isLegacyTransaction(transaction: FundTransaction): transaction is LegacyFundTransaction {
@@ -72,6 +74,7 @@ function normalizeWatchlistFund(fund: WatchlistFund): WatchlistFund {
     ...fund,
     transactions: (fund.transactions ?? []).map(normalizeTransaction),
     sipPlans: fund.sipPlans ?? [],
+    sipExecutionRecords: fund.sipExecutionRecords ?? [],
   };
 }
 

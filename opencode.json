@@ -1,0 +1,38 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "pm",
+  "agent": {
+    "pm": {
+      "mode": "primary",
+      "description": "PM role"
+    },
+    "arch": {
+      "mode": "primary",
+      "description": "ARCH role"
+    },
+    "be": {
+      "mode": "primary",
+      "description": "BE role"
+    },
+    "fe": {
+      "mode": "primary",
+      "description": "FE role"
+    },
+    "qa": {
+      "mode": "primary",
+      "description": "QA role"
+    }
+  },
+  "instructions": [
+    "docs/SPACE_INDEX.md",
+    "docs/framework/core_rules.md",
+    "docs/solo-commands.md",
+    "docs/solo-start.md",
+    "docs/solo-pick.md",
+    "docs/solo-pass.md",
+    "docs/solo-notify.md",
+    "docs/solo-onboard.md",
+    "docs/solo-config-init.md",
+    "docs/solo-auto-notify.md"
+  ]
+}

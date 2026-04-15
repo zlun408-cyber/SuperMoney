@@ -2,6 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 
 import { calculatePositionSummary } from '@/lib/calculations/profit-loss';
+import { canPreviewAdjustedEstimate } from '@/lib/funds/estimate-adjustment-preview';
 import { calculateTransactionLedgerSummary } from '@/lib/funds/transactions';
 import type { FundQuote } from '@/lib/funds/types';
 import type { WatchlistFund } from '@/lib/storage/watchlist-storage';
@@ -20,6 +21,15 @@ function formatPercent(value: number | undefined) {
 
 function formatNumber(value: number | null | undefined) {
   return typeof value === 'number' ? value.toFixed(2) : '--';
+}
+
+function formatDifference(value: number | null | undefined) {
+  if (typeof value !== 'number') {
+    return '--';
+  }
+
+  const prefix = value > 0 ? '+' : '';
+  return `${prefix}${value.toFixed(4)}`;
 }
 
 export function WatchlistTable({
@@ -54,6 +64,7 @@ export function WatchlistTable({
         <tbody className="divide-y divide-slate-100">
           {funds.map((fund) => {
             const quote = quotesByCode[fund.code];
+            const hasAdjustmentPreview = canPreviewAdjustedEstimate(quote);
             const ledgerSummary = fund.transactions?.length
               ? calculateTransactionLedgerSummary(fund.transactions, quote?.estimatedNav)
               : null;
@@ -82,7 +93,24 @@ export function WatchlistTable({
                   </Link>
                 </td>
                 <td className="px-4 py-3 text-slate-600">{fund.code}</td>
-                <td className="px-4 py-3 text-slate-900">{formatNumber(quote?.estimatedNav)}</td>
+                <td className="px-4 py-3 text-slate-900">
+                  <div>
+                    <p>{formatNumber(quote?.estimatedNav)}</p>
+                    {hasAdjustmentPreview ? (
+                      <div className="mt-1 space-y-1">
+                        <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
+                          修正预览可用
+                        </span>
+                        <p className="text-xs text-slate-500">
+                          详情页可切换 · 差额{' '}
+                          {formatDifference(
+                            (quote.adjustedEstimatedNav ?? quote.estimatedNav) - quote.estimatedNav,
+                          )}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                </td>
                 <td className="px-4 py-3 text-slate-900">{formatPercent(quote?.changeRate)}</td>
                 <td className="px-4 py-3 text-slate-600">{holdingText}</td>
                 <td className="px-4 py-3 text-slate-900">{profitText}</td>

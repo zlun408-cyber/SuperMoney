@@ -39,5 +39,20 @@
 - [x] 设计并落地登录态下的定投计划云端持久化方案
 - [x] 补齐定投计划结束态规则
 - [x] 补齐真实 Supabase `fund_sip_plans` 表结构与接线说明
-- [ ] 补齐定投计划自动生成更多去重边界
-- [ ] 让交易记录录入表单进一步去掉手填净值的强依赖
+- [x] 补齐定投计划自动生成更多去重边界
+- [x] 让交易记录录入表单进一步去掉手填净值的强依赖
+- [x] 修复登录态云端交易记录规范化字段映射
+- [x] 落地定投执行记录（`pending / generated / skipped`）及本地/云端持久化
+- [x] 修复删除自动生成定投交易后的跳过重放语义
+- [x] 为认证弹窗内联报错补齐单测与 E2E
+- [x] 为定投执行回放补齐聚焦 E2E
+- [x] 补充 Supabase `fund_sip_executions` SQL 与 rollout checklist
+- [x] 补齐登录态云端执行记录路径 E2E / 集成验证
+- [x] 验证历史净值获取失败时的降级提示与手填切换体验
+- [x] 落地 estimate accuracy baseline（本地样本采集 / 收敛 / 聚合与可信度分级）
+- [x] 在基金详情页落地 estimate confidence panel
+- [x] 落地 `/accuracy` 准确度看板
+- [x] 为 `/accuracy` 补齐 localStorage 种数 E2E
+- [ ] 设计高阶 accuracy iteration：按交易日窗口、样本量、误差分布拆分可信度阈值
+- [ ] 补齐异常基金排查视图：高误差基金、未收敛样本、连续偏差样本
+- [ ] 评估 estimate accuracy 样本从 localStorage 升级到云端/可导出的路径

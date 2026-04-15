@@ -1,8 +1,16 @@
-import type { BuyTransaction, FundTransaction, SipPlan, SipPlanStatus } from '@/lib/funds/types';
+import type {
+  BuyTransaction,
+  FundTransaction,
+  SipExecutionRecord,
+  SipPlan,
+  SipPlanStatus,
+} from '@/lib/funds/types';
 
 interface MaterializeSipPlansInput {
+  fundId: string;
   plans: SipPlan[];
   transactions: FundTransaction[];
+  executionRecords: SipExecutionRecord[];
   now: string;
   resolveConfirmedNav: (plan: SipPlan) => number | null;
 }
@@ -10,6 +18,7 @@ interface MaterializeSipPlansInput {
 interface MaterializeSipPlansResult {
   updatedPlans: SipPlan[];
   createdTransactions: BuyTransaction[];
+  updatedExecutionRecords: SipExecutionRecord[];
 }
 
 function addDays(date: Date, days: number) {
@@ -69,7 +78,7 @@ function hasGeneratedTransactionForExecution(
   planId: string,
   placedDate: string,
 ) {
-  return transactions.some(
+  return transactions.find(
     (transaction) =>
       'sourcePlanId' in transaction &&
       transaction.source === 'sip_plan' &&
@@ -78,14 +87,94 @@ function hasGeneratedTransactionForExecution(
   );
 }
 
+function buildSipExecutionRecord(params: {
+  fundId: string;
+  planId: string;
+  executionDate: string;
+  now: string;
+}): SipExecutionRecord {
+  return {
+    id: `${params.planId}-${params.executionDate}`,
+    planId: params.planId,
+    fundId: params.fundId,
+    executionDate: params.executionDate,
+    status: 'pending',
+    createdAt: params.now,
+    updatedAt: params.now,
+  };
+}
+
+function findExecutionRecordIndex(
+  executionRecords: SipExecutionRecord[],
+  planId: string,
+  executionDate: string,
+) {
+  return executionRecords.findIndex(
+    (record) => record.planId === planId && record.executionDate === executionDate,
+  );
+}
+
+function markExecutionRecordGenerated(
+  executionRecord: SipExecutionRecord,
+  transactionId: string,
+  generatedAt: string,
+): SipExecutionRecord {
+  return {
+    ...executionRecord,
+    status: 'generated',
+    transactionId,
+    generatedAt,
+    skippedAt: undefined,
+    skipReason: undefined,
+    updatedAt: generatedAt,
+  };
+}
+
+export function markSipExecutionSkippedAfterDeletion({
+  executionRecords,
+  transaction,
+  skippedAt,
+}: {
+  executionRecords: SipExecutionRecord[];
+  transaction: FundTransaction;
+  skippedAt: string;
+}): SipExecutionRecord[] {
+  if (!('sourcePlanId' in transaction) || transaction.source !== 'sip_plan') {
+    return executionRecords;
+  }
+
+  return executionRecords.map((executionRecord) => {
+    const matchesRecord =
+      executionRecord.planId === transaction.sourcePlanId &&
+      executionRecord.executionDate === transaction.placedDate &&
+      executionRecord.status === 'generated';
+
+    if (!matchesRecord) {
+      return executionRecord;
+    }
+
+    return {
+      ...executionRecord,
+      status: 'skipped' as const,
+      transactionId: undefined,
+      skippedAt,
+      skipReason: 'deleted_generated_transaction' as const,
+      updatedAt: skippedAt,
+    };
+  });
+}
+
 export function materializeSipPlans({
+  fundId,
   plans,
   transactions,
+  executionRecords,
   now,
   resolveConfirmedNav,
 }: MaterializeSipPlansInput): MaterializeSipPlansResult {
   const createdTransactions: BuyTransaction[] = [];
   const allTransactions = [...transactions];
+  const updatedExecutionRecords = [...executionRecords];
   const nowTimestamp = new Date(now).getTime();
 
   const updatedPlans = plans.map((plan) => {
@@ -120,27 +209,71 @@ export function materializeSipPlans({
         continue;
       }
 
-      if (!hasGeneratedTransactionForExecution(allTransactions, plan.id, placedDate)) {
-        const confirmedNav = resolveConfirmedNav(plan);
+      const executionRecordIndex = findExecutionRecordIndex(updatedExecutionRecords, plan.id, placedDate);
+      const executionRecord =
+        executionRecordIndex >= 0
+          ? updatedExecutionRecords[executionRecordIndex]
+          : buildSipExecutionRecord({
+              fundId,
+              planId: plan.id,
+              executionDate: placedDate,
+              now,
+            });
 
-        if (confirmedNav === null) {
-          break;
+      if (executionRecordIndex < 0) {
+        updatedExecutionRecords.push(executionRecord);
+      }
+
+      if (executionRecord.status === 'pending') {
+        const existingGeneratedTransaction = hasGeneratedTransactionForExecution(allTransactions, plan.id, placedDate);
+
+        if (existingGeneratedTransaction) {
+          const nextRecord = markExecutionRecordGenerated(executionRecord, existingGeneratedTransaction.id, now);
+
+          if (executionRecordIndex >= 0) {
+            updatedExecutionRecords[executionRecordIndex] = nextRecord;
+          } else {
+            updatedExecutionRecords[updatedExecutionRecords.length - 1] = nextRecord;
+          }
+        } else {
+          const confirmedNav = resolveConfirmedNav(plan);
+
+          if (confirmedNav === null) {
+            break;
+          }
+
+          const createdTransaction: BuyTransaction = {
+            id: `${plan.id}-${placedDate}`,
+            type: 'buy',
+            amount: plan.amount,
+            confirmedNav,
+            placedDate,
+            placedPeriod: plan.executionPeriod,
+            effectiveDate: resolveEffectiveDate(placedDate, plan.executionPeriod),
+            source: 'sip_plan',
+            sourcePlanId: plan.id,
+          };
+
+          createdTransactions.push(createdTransaction);
+          allTransactions.push(createdTransaction);
+
+          const nextRecord = markExecutionRecordGenerated(executionRecord, createdTransaction.id, now);
+
+          if (executionRecordIndex >= 0) {
+            updatedExecutionRecords[executionRecordIndex] = nextRecord;
+          } else {
+            updatedExecutionRecords[updatedExecutionRecords.length - 1] = nextRecord;
+          }
         }
+      }
 
-        const createdTransaction: BuyTransaction = {
-          id: `${plan.id}-${placedDate}`,
-          type: 'buy',
-          amount: plan.amount,
-          confirmedNav,
-          placedDate,
-          placedPeriod: plan.executionPeriod,
-          effectiveDate: resolveEffectiveDate(placedDate, plan.executionPeriod),
-          source: 'sip_plan',
-          sourcePlanId: plan.id,
-        };
+      const latestExecutionRecord =
+        updatedExecutionRecords[
+          executionRecordIndex >= 0 ? executionRecordIndex : updatedExecutionRecords.length - 1
+        ];
 
-        createdTransactions.push(createdTransaction);
-        allTransactions.push(createdTransaction);
+      if (latestExecutionRecord.status === 'pending') {
+        break;
       }
 
       hasChanged = true;
@@ -171,5 +304,6 @@ export function materializeSipPlans({
   return {
     updatedPlans,
     createdTransactions,
+    updatedExecutionRecords,
   };
 }
