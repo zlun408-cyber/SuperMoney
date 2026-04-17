@@ -176,6 +176,159 @@ test('shows accuracy dashboard metrics and seeded fund rows from localStorage', 
   await expect(fundRows.nth(1)).toContainText('样本不足');
 });
 
+test('downloads JSON and CSV ZIP exports from the accuracy dashboard', async ({ page }) => {
+  await page.addInitScript((snapshots) => {
+    window.localStorage.setItem('super-finance-estimate-accuracy', JSON.stringify(snapshots));
+    window.localStorage.setItem(
+      'super-finance-adjustment-fund-decisions',
+      JSON.stringify({
+        '000001': {
+          status: 'validated',
+          updatedAt: '2026-04-14T09:00:00.000Z',
+          history: [
+            { status: 'verification', updatedAt: '2026-04-14T08:00:00.000Z' },
+            { status: 'validated', updatedAt: '2026-04-14T09:00:00.000Z' },
+          ],
+        },
+      }),
+    );
+  }, seededAccuracySnapshots);
+
+  await page.goto('/accuracy');
+  await page.waitForLoadState('networkidle');
+
+  const jsonDownloadPromise = page.waitForEvent('download');
+  await page.getByTestId('accuracy-export-json').click();
+  const jsonDownload = await jsonDownloadPromise;
+  expect(jsonDownload.suggestedFilename()).toMatch(/^accuracy-export-.*\.json$/);
+
+  const jsonPath = await jsonDownload.path();
+  expect(jsonPath).not.toBeNull();
+  const jsonPayload = JSON.parse(
+    await import('node:fs/promises').then((fs) => fs.readFile(jsonPath as string, 'utf8')),
+  ) as {
+    schemaVersion: string;
+    source: { mode: string };
+    snapshots: Array<{ fundCode: string; quoteUpdatedAtUtc: string }>;
+    adjustmentDecisions: Array<{ fundCode: string; history: unknown[] }>;
+  };
+  expect(jsonPayload.schemaVersion).toBe('accuracy-export/v1');
+  expect(jsonPayload.source.mode).toBe('local');
+  expect(jsonPayload.snapshots).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        fundCode: '000001',
+        quoteUpdatedAtUtc: '2026-04-10T06:30:00.000Z',
+      }),
+    ]),
+  );
+  expect(jsonPayload.adjustmentDecisions).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        fundCode: '000001',
+        history: expect.arrayContaining([
+          expect.objectContaining({ status: 'validated' }),
+        ]),
+      }),
+    ]),
+  );
+
+  const csvDownloadPromise = page.waitForEvent('download');
+  await page.getByTestId('accuracy-export-csv').click();
+  const csvDownload = await csvDownloadPromise;
+  expect(csvDownload.suggestedFilename()).toMatch(/^accuracy-export-.*\.zip$/);
+
+  const csvZipPath = await csvDownload.path();
+  expect(csvZipPath).not.toBeNull();
+  const archiveText = await import('node:fs/promises').then(async (fs) => {
+    const buffer = await fs.readFile(csvZipPath as string);
+    return buffer.toString('utf8');
+  });
+  expect(archiveText).toContain('accuracy_snapshots.csv');
+  expect(archiveText).toContain('accuracy_fund_summaries.csv');
+  expect(archiveText).toContain('accuracy_diagnostics.csv');
+  expect(archiveText).toContain('accuracy_adjustment_decisions.csv');
+  expect(archiveText).toContain('accuracy_adjustment_decision_history.csv');
+  expect(archiveText).toContain('000001::2026-04-10 14:30,000001,稳健成长');
+  expect(archiveText).toContain('000001,validated,2026-04-14T09:00:00.000Z,2');
+});
+
+test('filters downloaded accuracy exports by fund code and trading date range', async ({ page }) => {
+  await page.addInitScript((snapshots) => {
+    window.localStorage.setItem('super-finance-estimate-accuracy', JSON.stringify(snapshots));
+    window.localStorage.setItem(
+      'super-finance-adjustment-fund-decisions',
+      JSON.stringify({
+        '000001': {
+          status: 'validated',
+          updatedAt: '2026-04-14T09:00:00.000Z',
+          history: [{ status: 'validated', updatedAt: '2026-04-14T09:00:00.000Z' }],
+        },
+        '000002': {
+          status: 'watch',
+          updatedAt: '2026-04-14T10:00:00.000Z',
+          history: [{ status: 'watch', updatedAt: '2026-04-14T10:00:00.000Z' }],
+        },
+      }),
+    );
+  }, seededAccuracySnapshots);
+
+  await page.goto('/accuracy');
+  await page.waitForLoadState('networkidle');
+
+  await page.getByTestId('accuracy-export-fund-codes').fill('000001');
+  await page.getByTestId('accuracy-export-start-date').fill('2026-04-11');
+  await page.getByTestId('accuracy-export-end-date').fill('2026-04-11');
+
+  const jsonDownloadPromise = page.waitForEvent('download');
+  await page.getByTestId('accuracy-export-json').click();
+  const jsonDownload = await jsonDownloadPromise;
+  const jsonPath = await jsonDownload.path();
+  expect(jsonPath).not.toBeNull();
+  const jsonPayload = JSON.parse(
+    await import('node:fs/promises').then((fs) => fs.readFile(jsonPath as string, 'utf8')),
+  ) as {
+    filters: {
+      fundCodes: string[];
+      startTradingDate: string;
+      endTradingDate: string;
+    };
+    snapshots: Array<{ fundCode: string; tradingDate: string; snapshotKey: string }>;
+    adjustmentDecisions: Array<{ fundCode: string }>;
+  };
+
+  expect(jsonPayload.filters).toEqual({
+    fundCodes: ['000001'],
+    startTradingDate: '2026-04-11',
+    endTradingDate: '2026-04-11',
+    includeDerived: true,
+  });
+  expect(jsonPayload.snapshots).toEqual([
+    expect.objectContaining({
+      fundCode: '000001',
+      tradingDate: '2026-04-11',
+      snapshotKey: '000001::2026-04-11 14:30',
+    }),
+  ]);
+  expect(jsonPayload.adjustmentDecisions).toEqual([
+    expect.objectContaining({ fundCode: '000001' }),
+  ]);
+
+  const csvDownloadPromise = page.waitForEvent('download');
+  await page.getByTestId('accuracy-export-csv').click();
+  const csvDownload = await csvDownloadPromise;
+  const csvZipPath = await csvDownload.path();
+  expect(csvZipPath).not.toBeNull();
+  const archiveText = await import('node:fs/promises').then(async (fs) => {
+    const buffer = await fs.readFile(csvZipPath as string);
+    return buffer.toString('utf8');
+  });
+
+  expect(archiveText).toContain('000001::2026-04-11 14:30,000001,稳健成长');
+  expect(archiveText).not.toContain('000001::2026-04-10 14:30');
+  expect(archiveText).not.toContain('000002::2026-04-12 14:30');
+});
+
 
 test('filters fund-level adjustment candidates by recommendation status', async ({ page }) => {
   const filterSnapshots = [

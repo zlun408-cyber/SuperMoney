@@ -28,8 +28,8 @@ interface FundDetailContentProps {
 }
 
 export function FundDetailContent({ code }: FundDetailContentProps) {
-  const { userId, cloudClient } = useAuthSession();
-  const { quotes } = useFundQuotes([code]);
+  const { userId, cloudClient, accuracyStore } = useAuthSession();
+  const { quotes } = useFundQuotes([code], undefined, undefined, { accuracyStore });
   const quote = quotes.find((item) => item.code === code);
   const [estimateAccuracySummary, setEstimateAccuracySummary] =
     useState<EstimateAccuracySummary | null>(null);
@@ -45,7 +45,7 @@ export function FundDetailContent({ code }: FundDetailContentProps) {
   const fund = watchlist.find((item) => item.code === code);
 
   const refreshEstimateAccuracy = useCallback(() => {
-    const snapshots = loadEstimateAccuracySnapshots().filter((snapshot) => snapshot.fundCode === code);
+    const snapshots = accuracyStore.loadSnapshots().filter((snapshot) => snapshot.fundCode === code);
 
     if (snapshots.length === 0) {
       setEstimateAccuracySummary({
@@ -65,7 +65,7 @@ export function FundDetailContent({ code }: FundDetailContentProps) {
     const summary = summarizeEstimateAccuracy(snapshots);
     setEstimateAccuracySummary(summary);
     setEstimateConfidenceLevel(gradeEstimateConfidence(summary));
-  }, [code]);
+  }, [accuracyStore, code]);
 
   useEffect(() => {
     refreshEstimateAccuracy();

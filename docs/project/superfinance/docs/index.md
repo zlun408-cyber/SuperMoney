@@ -19,6 +19,7 @@
 ## 重要运维/落地文档
 - `docs/project/superfinance/docs/supabase-rollout-checklist.md`: Supabase SQL 执行与验收清单
 - `docs/project/superfinance/docs/supabase-production-acceptance-runbook.md`: Supabase 线上落地最小执行 Runbook
+- `docs/superpowers/specs/2026-04-17-estimate-accuracy-export-sync-adr.md`: estimate accuracy 样本导出与云端留存 ADR 草案
 
 ## 主要目录结构
 ```

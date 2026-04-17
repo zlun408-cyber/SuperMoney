@@ -2,7 +2,9 @@
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import { createAuthenticatedAccuracyStore, createLocalAccuracyStore } from '@/lib/accuracy/accuracy-store';
 import type { AuthCredentials, AuthSessionValue, SupabaseAuthClientLike, SupabaseSessionLike } from '@/lib/auth/types';
+import { createSupabaseCloudAccuracyClient } from '@/lib/sync/cloud-accuracy';
 import { createSupabaseCloudWatchlistClient } from '@/lib/sync/cloud-watchlist';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
@@ -21,6 +23,7 @@ interface SessionState {
 export function AuthProvider({ children, authClient }: AuthProviderProps) {
   const browserClient = createSupabaseBrowserClient();
   const authApi = authClient ?? (browserClient ? browserClient.auth : null);
+  const localAccuracyStore = useMemo(() => createLocalAccuracyStore(), []);
   const [sessionState, setSessionState] = useState<SessionState>({
     isReady: authApi === null,
     session: null,
@@ -93,6 +96,37 @@ export function AuthProvider({ children, authClient }: AuthProviderProps) {
     };
   }, [authApi]);
 
+  const cloudClient = useMemo(
+    () => (browserClient ? createSupabaseCloudWatchlistClient(browserClient) : null),
+    [browserClient],
+  );
+  const cloudAccuracyClient = useMemo(
+    () => (browserClient ? createSupabaseCloudAccuracyClient(browserClient) : null),
+    [browserClient],
+  );
+  const accuracyStore = useMemo(() => {
+    const userId = sessionState.session?.user?.id;
+
+    if (userId && cloudAccuracyClient) {
+      return createAuthenticatedAccuracyStore({
+        userId,
+        cloudClient: cloudAccuracyClient,
+      });
+    }
+
+    return localAccuracyStore;
+  }, [cloudAccuracyClient, localAccuracyStore, sessionState.session]);
+
+  useEffect(() => {
+    if (!sessionState.isReady) {
+      return;
+    }
+
+    void accuracyStore.initialize().catch(() => {
+      // Ignore bootstrap failures to avoid blocking auth initialization.
+    });
+  }, [accuracyStore, sessionState.isReady]);
+
   const value = useMemo<AuthSessionValue>(() => {
     const session = sessionState.session;
     const user = session?.user ?? null;
@@ -103,7 +137,8 @@ export function AuthProvider({ children, authClient }: AuthProviderProps) {
       isAuthenticated,
       userId: user?.id ?? null,
       userEmail: user?.email ?? null,
-      cloudClient: browserClient ? createSupabaseCloudWatchlistClient(browserClient) : null,
+      cloudClient,
+      accuracyStore,
       login: async (credentials: AuthCredentials) => {
         if (!authApi) {
           throw new Error('Supabase 未配置，无法登录');
@@ -138,7 +173,7 @@ export function AuthProvider({ children, authClient }: AuthProviderProps) {
         }
       },
     };
-  }, [authApi, browserClient, sessionState.isReady, sessionState.session]);
+  }, [accuracyStore, authApi, cloudClient, sessionState.isReady, sessionState.session]);
 
   return <AuthSessionContext.Provider value={value}>{children}</AuthSessionContext.Provider>;
 }

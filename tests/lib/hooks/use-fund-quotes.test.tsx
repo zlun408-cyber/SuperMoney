@@ -2,6 +2,7 @@ import { StrictMode, type ReactNode } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { AccuracyStore } from '@/lib/accuracy/accuracy-store';
 import type { FundQuote } from '@/lib/funds/types';
 import { ESTIMATE_ADJUSTMENT_DECISIONS_UPDATED_EVENT } from '@/lib/funds/estimate-adjustment-policy';
 import { useFundQuotes } from '@/lib/hooks/use-fund-quotes';
@@ -361,6 +362,50 @@ describe('useFundQuotes', () => {
       decisionStatus: 'watch',
     });
     expect(result.current.quotes[0].adjustmentApplied).toBe(false);
+  });
+
+  it('uses the injected accuracy store for snapshot persistence and decision loading', async () => {
+    vi.useRealTimers();
+
+    const fetchQuotes = vi.fn().mockResolvedValue([
+      {
+        code: '000001',
+        name: '基金A',
+        estimatedNav: 1.01,
+        changeRate: 0.2,
+        updatedAt: '2026-04-14 14:30',
+      },
+    ]);
+    let snapshotsStore: Parameters<AccuracyStore['saveSnapshots']>[0] = [];
+    const accuracyStore: AccuracyStore = {
+      initialize: vi.fn().mockResolvedValue(undefined),
+      loadSnapshots: vi.fn(() => snapshotsStore),
+      saveSnapshots: vi.fn((snapshots) => {
+        snapshotsStore = snapshots;
+      }),
+      upsertSnapshots: vi.fn(),
+      loadAdjustmentDecisions: vi.fn(() => ({
+        '000001': {
+          status: 'validated',
+          updatedAt: '2026-04-14T09:00:00.000Z',
+          history: [{ status: 'validated', updatedAt: '2026-04-14T09:00:00.000Z' }],
+        },
+      })),
+      saveAdjustmentDecisions: vi.fn(),
+    };
+
+    const { result } = renderHook(() =>
+      useFundQuotes(['000001'], fetchQuotes, 60_000, {
+        accuracyStore,
+        resolveFinalNav: vi.fn().mockResolvedValue(null),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.quotes).toHaveLength(1);
+      expect(accuracyStore.loadAdjustmentDecisions).toHaveBeenCalled();
+      expect(accuracyStore.saveSnapshots).toHaveBeenCalled();
+    });
   });
 });
 

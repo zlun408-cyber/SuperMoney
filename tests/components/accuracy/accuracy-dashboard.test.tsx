@@ -5,6 +5,8 @@ import { AccuracyDashboard } from '@/components/accuracy/accuracy-dashboard';
 import type { EstimateAccuracySnapshot } from '@/lib/funds/types';
 
 const mockLoadEstimateAccuracySnapshots = vi.fn<() => EstimateAccuracySnapshot[]>();
+const mockUseAuthSession = vi.fn();
+const mockSaveAdjustmentDecisions = vi.fn();
 
 vi.mock('@/lib/storage/estimate-accuracy-storage', () => ({
   ESTIMATE_ACCURACY_STORAGE_KEY: 'super-finance-estimate-accuracy',
@@ -12,10 +14,29 @@ vi.mock('@/lib/storage/estimate-accuracy-storage', () => ({
   loadEstimateAccuracySnapshots: () => mockLoadEstimateAccuracySnapshots(),
 }));
 
+vi.mock('@/lib/auth/auth-context', () => ({
+  useAuthSession: () => mockUseAuthSession(),
+}));
+
 describe('AccuracyDashboard', () => {
   beforeEach(() => {
     mockLoadEstimateAccuracySnapshots.mockReturnValue([]);
     window.localStorage.clear();
+    mockSaveAdjustmentDecisions.mockImplementation((decisions: Record<string, unknown>) => {
+      window.localStorage.setItem('super-finance-adjustment-fund-decisions', JSON.stringify(decisions));
+      window.dispatchEvent(new CustomEvent('super-finance-adjustment-fund-decisions-updated'));
+    });
+    mockUseAuthSession.mockReturnValue({
+      accuracyStore: {
+        loadSnapshots: () => mockLoadEstimateAccuracySnapshots(),
+        loadAdjustmentDecisions: () => {
+          const raw = window.localStorage.getItem('super-finance-adjustment-fund-decisions');
+          return raw ? JSON.parse(raw) : {};
+        },
+        saveAdjustmentDecisions: (decisions: Record<string, unknown>) =>
+          mockSaveAdjustmentDecisions(decisions),
+      },
+    });
   });
 
   afterEach(() => {
@@ -840,6 +861,48 @@ describe('AccuracyDashboard', () => {
     const persistedRows = screen.getAllByTestId('accuracy-adjustment-decision-row');
     expect(within(persistedRows[0]).getByText('优先修正基金')).toBeTruthy();
     expect(within(persistedRows[0]).getAllByText('加入验证').length).toBeGreaterThan(0);
+  });
+
+  it('writes manual adjustment decisions through the auth accuracy store', async () => {
+    mockLoadEstimateAccuracySnapshots.mockReturnValue([
+      {
+        id: 'store-1',
+        fundCode: '000010',
+        fundName: '高偏差基金',
+        quoteUpdatedAt: '2026-04-10 14:30',
+        tradingDate: '2026-04-10',
+        estimatedNav: 1.03,
+        finalNav: 1,
+        absoluteErrorRate: 0.03,
+        resolvedAt: '2026-04-10T15:30:00.000Z',
+        createdAt: '2026-04-10T14:30:00.000Z',
+        updatedAt: '2026-04-10T15:30:00.000Z',
+      },
+      {
+        id: 'store-2',
+        fundCode: '000010',
+        fundName: '高偏差基金',
+        quoteUpdatedAt: '2026-04-11 14:30',
+        tradingDate: '2026-04-11',
+        estimatedNav: 1.02,
+        finalNav: 1,
+        absoluteErrorRate: 0.02,
+        resolvedAt: '2026-04-11T15:30:00.000Z',
+        createdAt: '2026-04-11T14:30:00.000Z',
+        updatedAt: '2026-04-11T15:30:00.000Z',
+      },
+    ]);
+
+    render(<AccuracyDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('accuracy-adjustment-fund-row')).toHaveLength(1);
+    });
+
+    fireEvent.click(screen.getByTestId('accuracy-adjustment-fund-toggle-000010'));
+    fireEvent.click(screen.getByTestId('accuracy-adjustment-decision-watch-000010'));
+
+    expect(mockSaveAdjustmentDecisions).toHaveBeenCalled();
   });
 
   it('filters execution items and jumps back to the related fund detail', async () => {

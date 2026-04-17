@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import {
+  downloadAccuracyCsvExportZip,
+  downloadAccuracyJsonExport,
+} from '@/lib/accuracy/export-download';
+import { useAuthSession } from '@/lib/auth/auth-context';
+import {
   buildEstimateAccuracyAdjustmentSimulation,
   type EstimateAccuracyAdjustmentSimulationFundInsight,
 } from '@/lib/funds/estimate-accuracy-adjustment';
@@ -10,10 +15,6 @@ import {
   buildEstimateAccuracyAbnormalInvestigationItems,
   type EstimateAccuracyAbnormalTag,
 } from '@/lib/funds/estimate-accuracy-abnormal-investigation';
-import {
-  ESTIMATE_ADJUSTMENT_DECISIONS_STORAGE_KEY,
-  ESTIMATE_ADJUSTMENT_DECISIONS_UPDATED_EVENT,
-} from '@/lib/funds/estimate-adjustment-policy';
 import { buildEstimateAdjustmentValidationSummary } from '@/lib/funds/estimate-adjustment-validation';
 import {
   summarizeEstimateAccuracyDiagnostics,
@@ -33,8 +34,12 @@ import type { EstimateAccuracySnapshot, EstimateAccuracySummary } from '@/lib/fu
 import {
   ESTIMATE_ACCURACY_STORAGE_KEY,
   ESTIMATE_ACCURACY_UPDATED_EVENT,
-  loadEstimateAccuracySnapshots,
 } from '@/lib/storage/estimate-accuracy-storage';
+import {
+  ESTIMATE_ADJUSTMENT_DECISIONS_STORAGE_KEY,
+  ESTIMATE_ADJUSTMENT_DECISIONS_UPDATED_EVENT,
+  normalizeEstimateAdjustmentDecisionItem,
+} from '@/lib/storage/estimate-adjustment-storage';
 
 interface FundAccuracyItem {
   fundCode: string;
@@ -384,61 +389,6 @@ const buildAdjustmentFundRuleDraft = (
   };
 };
 
-const loadAdjustmentFundDecisions = (): Record<string, AdjustmentFundDecisionItem> => {
-  if (typeof window === 'undefined') {
-    return {};
-  }
-
-  try {
-    const raw = window.localStorage.getItem(ESTIMATE_ADJUSTMENT_DECISIONS_STORAGE_KEY);
-    if (!raw) {
-      return {};
-    }
-
-    const parsed = JSON.parse(raw) as Record<
-      string,
-      AdjustmentFundDecisionItem | { status: AdjustmentFundDecisionStatus; updatedAt: string }
-    >;
-    if (!parsed || typeof parsed !== 'object') {
-      return {};
-    }
-
-    return Object.fromEntries(
-      Object.entries(parsed).map(([fundCode, item]) => {
-        const normalizedHistory =
-          'history' in item && Array.isArray(item.history) && item.history.length > 0
-            ? item.history
-            : [{ status: item.status, updatedAt: item.updatedAt }];
-
-        return [
-          fundCode,
-          {
-            status: item.status,
-            updatedAt: item.updatedAt,
-            history: normalizedHistory,
-          } satisfies AdjustmentFundDecisionItem,
-        ];
-      }),
-    );
-  } catch {
-    return {};
-  }
-};
-
-const saveAdjustmentFundDecisions = (
-  decisions: Record<string, AdjustmentFundDecisionItem>,
-): void => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.localStorage.setItem(
-    ESTIMATE_ADJUSTMENT_DECISIONS_STORAGE_KEY,
-    JSON.stringify(decisions),
-  );
-  window.dispatchEvent(new CustomEvent(ESTIMATE_ADJUSTMENT_DECISIONS_UPDATED_EVENT));
-};
-
 const getAdjustmentDecisionLabel = (status: AdjustmentFundDecisionStatus): string => {
   switch (status) {
     case 'verification':
@@ -728,13 +678,32 @@ const buildAdjustmentFundDetails = (
   );
 };
 
+const normalizeAdjustmentFundDecisions = (
+  decisions: Record<string, unknown>,
+): Record<string, AdjustmentFundDecisionItem> =>
+  Object.entries(decisions).reduce<Record<string, AdjustmentFundDecisionItem>>(
+    (accumulator, [fundCode, decision]) => {
+      const normalized = normalizeEstimateAdjustmentDecisionItem(decision);
+      if (normalized) {
+        accumulator[fundCode] = normalized;
+      }
+
+      return accumulator;
+    },
+    {},
+  );
+
 export function AccuracyDashboard() {
+  const { accuracyStore, isAuthenticated, userId } = useAuthSession();
   const [snapshots, setSnapshots] = useState<EstimateAccuracySnapshot[]>([]);
   const [hasLoadedSnapshots, setHasLoadedSnapshots] = useState(false);
   const [adjustmentFundFilter, setAdjustmentFundFilter] = useState<AdjustmentFundFilter>('all');
   const [adjustmentFundSort, setAdjustmentFundSort] = useState<AdjustmentFundSort>('improvement');
   const [adjustmentExecutionFilter, setAdjustmentExecutionFilter] = useState<AdjustmentExecutionFilter>('all');
   const [expandedAdjustmentFundCode, setExpandedAdjustmentFundCode] = useState<string | null>(null);
+  const [exportFundCodesText, setExportFundCodesText] = useState('');
+  const [exportStartTradingDate, setExportStartTradingDate] = useState('');
+  const [exportEndTradingDate, setExportEndTradingDate] = useState('');
   const [adjustmentFundDecisions, setAdjustmentFundDecisions] = useState<
     Record<string, AdjustmentFundDecisionItem>
   >({});
@@ -747,8 +716,12 @@ export function AccuracyDashboard() {
         return;
       }
 
-      setSnapshots(loadEstimateAccuracySnapshots());
-      setAdjustmentFundDecisions(loadAdjustmentFundDecisions());
+      setSnapshots(accuracyStore.loadSnapshots());
+      setAdjustmentFundDecisions(
+        normalizeAdjustmentFundDecisions(
+          accuracyStore.loadAdjustmentDecisions() as Record<string, unknown>,
+        ),
+      );
       setHasLoadedSnapshots(true);
     };
     const handleStorage = (event: StorageEvent) => {
@@ -774,7 +747,7 @@ export function AccuracyDashboard() {
       window.removeEventListener(ESTIMATE_ACCURACY_UPDATED_EVENT, refresh);
       window.removeEventListener(ESTIMATE_ADJUSTMENT_DECISIONS_UPDATED_EVENT, refresh);
     };
-  }, []);
+  }, [accuracyStore]);
 
   const fundItems = useMemo(() => buildFundItems(snapshots), [snapshots]);
   const overall = useMemo(() => buildOverallSummary(snapshots), [snapshots]);
@@ -997,7 +970,7 @@ export function AccuracyDashboard() {
           ],
         },
       };
-      saveAdjustmentFundDecisions(next);
+      accuracyStore.saveAdjustmentDecisions(next);
       return next;
     });
   };
@@ -1008,12 +981,105 @@ export function AccuracyDashboard() {
     setExpandedAdjustmentFundCode(fundCode);
   };
 
+  const buildExportFilterOptions = () => {
+    const fundCodes = exportFundCodesText
+      .split(',')
+      .map((fundCode) => fundCode.trim())
+      .filter((fundCode) => fundCode.length > 0);
+
+    return {
+      fundCodes: fundCodes.length > 0 ? fundCodes : null,
+      startTradingDate: exportStartTradingDate || null,
+      endTradingDate: exportEndTradingDate || null,
+    };
+  };
+
+  const handleExportJson = (): void => {
+    downloadAccuracyJsonExport({
+      snapshots,
+      decisions: adjustmentFundDecisions,
+      ...buildExportFilterOptions(),
+      source: {
+        mode: isAuthenticated ? 'cloud' : 'local',
+        userId,
+      },
+    });
+  };
+
+  const handleExportCsv = (): void => {
+    downloadAccuracyCsvExportZip({
+      snapshots,
+      decisions: adjustmentFundDecisions,
+      ...buildExportFilterOptions(),
+      source: {
+        mode: isAuthenticated ? 'cloud' : 'local',
+        userId,
+      },
+    });
+  };
+
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 px-6 py-10">
-      <header className="flex flex-col gap-2">
-        <p className="text-sm font-medium text-slate-500">SuperFinance</p>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">估值准确度看板</h1>
-        <p className="text-sm text-slate-600">基于本地 estimate accuracy snapshots 汇总各基金估值误差表现。</p>
+      <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-medium text-slate-500">SuperFinance</p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">估值准确度看板</h1>
+          <p className="text-sm text-slate-600">基于本地 estimate accuracy snapshots 汇总各基金估值误差表现。</p>
+        </div>
+        <div className="flex max-w-xl flex-col gap-3">
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1.2fr)_120px_120px]">
+            <label className="flex flex-col gap-1 text-xs font-medium text-slate-500">
+              基金代码
+              <input
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-500"
+                data-testid="accuracy-export-fund-codes"
+                onChange={(event) => setExportFundCodesText(event.target.value)}
+                placeholder="000001,000002"
+                value={exportFundCodesText}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-medium text-slate-500">
+              起始交易日
+              <input
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-500"
+                data-testid="accuracy-export-start-date"
+                onChange={(event) => setExportStartTradingDate(event.target.value)}
+                type="date"
+                value={exportStartTradingDate}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-medium text-slate-500">
+              结束交易日
+              <input
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-500"
+                data-testid="accuracy-export-end-date"
+                onChange={(event) => setExportEndTradingDate(event.target.value)}
+                type="date"
+                value={exportEndTradingDate}
+              />
+            </label>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button
+              data-testid="accuracy-export-json"
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!hasLoadedSnapshots}
+              onClick={handleExportJson}
+              type="button"
+            >
+              导出 JSON
+            </button>
+            <button
+              data-testid="accuracy-export-csv"
+              className="rounded-xl border border-slate-900 bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!hasLoadedSnapshots}
+              onClick={handleExportCsv}
+              type="button"
+            >
+              导出 CSV
+            </button>
+          </div>
+        </div>
       </header>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

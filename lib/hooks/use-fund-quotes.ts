@@ -2,12 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import type { AccuracyStore } from '@/lib/accuracy/accuracy-store';
 import { fetchFundQuotes, type FetchFundQuotes } from '@/lib/funds/data-source';
 import {
   applyEstimateAdjustmentPolicyToQuotes,
-  ESTIMATE_ADJUSTMENT_DECISIONS_STORAGE_KEY,
-  ESTIMATE_ADJUSTMENT_DECISIONS_UPDATED_EVENT,
-  loadEstimateAdjustmentDecisions,
 } from '@/lib/funds/estimate-adjustment-policy';
 import { buildEstimateAdjustmentValidationSummary } from '@/lib/funds/estimate-adjustment-validation';
 import {
@@ -30,8 +28,17 @@ import {
   saveEstimateAccuracySnapshots,
   upsertEstimateAccuracySnapshots,
 } from '@/lib/storage/estimate-accuracy-storage';
+import {
+  ESTIMATE_ADJUSTMENT_DECISIONS_STORAGE_KEY,
+  ESTIMATE_ADJUSTMENT_DECISIONS_UPDATED_EVENT,
+  loadEstimateAdjustmentDecisions,
+} from '@/lib/storage/estimate-adjustment-storage';
 
 interface UseFundQuotesAccuracyOptions {
+  accuracyStore?: Pick<
+    AccuracyStore,
+    'loadSnapshots' | 'saveSnapshots' | 'loadAdjustmentDecisions'
+  >;
   loadSnapshots?: () => EstimateAccuracySnapshot[];
   saveSnapshots?: (snapshots: EstimateAccuracySnapshot[]) => void;
   resolveFinalNav?: (fundCode: string, tradingDate: string) => Promise<number | null>;
@@ -103,22 +110,40 @@ export function useFundQuotes(
   const previousQuotesRef = useRef<FundQuote[]>([]);
   const codesRef = useRef(codes);
   const fetcherRef = useRef(fetcher);
-  const loadSnapshotsRef = useRef(accuracyOptions?.loadSnapshots ?? loadEstimateAccuracySnapshots);
-  const saveSnapshotsRef = useRef(accuracyOptions?.saveSnapshots ?? saveEstimateAccuracySnapshots);
+  const loadSnapshotsRef = useRef(
+    accuracyOptions?.accuracyStore?.loadSnapshots ??
+      accuracyOptions?.loadSnapshots ??
+      loadEstimateAccuracySnapshots,
+  );
+  const saveSnapshotsRef = useRef(
+    accuracyOptions?.accuracyStore?.saveSnapshots ??
+      accuracyOptions?.saveSnapshots ??
+      saveEstimateAccuracySnapshots,
+  );
   const resolveFinalNavRef = useRef(accuracyOptions?.resolveFinalNav ?? defaultResolveFinalNav);
   const loadAdjustmentDecisionsRef = useRef(
-    accuracyOptions?.loadAdjustmentDecisions ?? loadEstimateAdjustmentDecisions,
+    accuracyOptions?.accuracyStore?.loadAdjustmentDecisions ??
+      accuracyOptions?.loadAdjustmentDecisions ??
+      loadEstimateAdjustmentDecisions,
   );
   const requestSeqRef = useRef(0);
   const codesKey = codes.join(',');
 
   codesRef.current = codes;
   fetcherRef.current = fetcher;
-  loadSnapshotsRef.current = accuracyOptions?.loadSnapshots ?? loadEstimateAccuracySnapshots;
-  saveSnapshotsRef.current = accuracyOptions?.saveSnapshots ?? saveEstimateAccuracySnapshots;
+  loadSnapshotsRef.current =
+    accuracyOptions?.accuracyStore?.loadSnapshots ??
+    accuracyOptions?.loadSnapshots ??
+    loadEstimateAccuracySnapshots;
+  saveSnapshotsRef.current =
+    accuracyOptions?.accuracyStore?.saveSnapshots ??
+    accuracyOptions?.saveSnapshots ??
+    saveEstimateAccuracySnapshots;
   resolveFinalNavRef.current = accuracyOptions?.resolveFinalNav ?? defaultResolveFinalNav;
   loadAdjustmentDecisionsRef.current =
-    accuracyOptions?.loadAdjustmentDecisions ?? loadEstimateAdjustmentDecisions;
+    accuracyOptions?.accuracyStore?.loadAdjustmentDecisions ??
+    accuracyOptions?.loadAdjustmentDecisions ??
+    loadEstimateAdjustmentDecisions;
 
   const loadQuotes = useCallback(async () => {
     requestSeqRef.current += 1;

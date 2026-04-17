@@ -14,7 +14,7 @@ import { useWatchlist } from '@/lib/hooks/use-watchlist';
 import type { WatchlistFund } from '@/lib/storage/watchlist-storage';
 
 export default function HomePage() {
-  const { userId, isAuthenticated, cloudClient } = useAuthSession();
+  const { userId, isAuthenticated, cloudClient, accuracyStore } = useAuthSession();
   const [editingFund, setEditingFund] = useState<WatchlistFund | null>(null);
   const [syncConflictActions, setSyncConflictActions] = useState<{
     useCloud: () => void;
@@ -27,6 +27,9 @@ export default function HomePage() {
   });
   const { quotes, error, isRefreshing, lastUpdatedAt, refresh } = useFundQuotes(
     watchlist.map((fund) => fund.code),
+    undefined,
+    undefined,
+    { accuracyStore },
   );
 
   const quotesByCode = useMemo(

@@ -62,6 +62,7 @@ describe('HomePage adjustment preview consistency', () => {
       userId: null,
       isAuthenticated: false,
       cloudClient: null,
+      accuracyStore: { kind: 'local-store' },
     });
     mockUseWatchlist.mockReturnValue({
       watchlist: [baseFund],
@@ -120,4 +121,27 @@ describe('HomePage adjustment preview consistency', () => {
       expect(within(row).queryByText(/详情页可切换/)).toBeNull();
     },
   );
+
+  it('passes the auth accuracy store into useFundQuotes', () => {
+    const accuracyStore = { kind: 'auth-accuracy-store' };
+    mockUseAuthSession.mockReturnValue({
+      userId: 'user-1',
+      isAuthenticated: true,
+      cloudClient: { kind: 'watchlist-cloud' },
+      accuracyStore,
+    });
+    mockUseFundQuotes.mockReturnValue({
+      quotes: [],
+      error: null,
+      isRefreshing: false,
+      lastUpdatedAt: null,
+      refresh: vi.fn(),
+    });
+
+    render(<HomePage />);
+
+    expect(mockUseFundQuotes).toHaveBeenCalledWith(['000001'], undefined, undefined, {
+      accuracyStore,
+    });
+  });
 });

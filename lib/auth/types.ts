@@ -1,3 +1,4 @@
+import type { AccuracyStore } from '@/lib/accuracy/accuracy-store';
 import type { CloudWatchlistClient } from '@/lib/sync/cloud-watchlist';
 
 export interface AuthCredentials {
@@ -41,6 +42,7 @@ export interface AuthSessionValue {
   userId: string | null;
   userEmail: string | null;
   cloudClient: CloudWatchlistClient | null;
+  accuracyStore: AccuracyStore;
   login: (credentials: AuthCredentials) => Promise<void>;
   register: (credentials: AuthCredentials) => Promise<void>;
   logout: () => Promise<void>;

@@ -6,6 +6,7 @@ import { FundDetailContent } from '@/components/fund/fund-detail-content';
 const mockUseFundQuotes = vi.fn();
 const mockUseWatchlist = vi.fn();
 const mockLoadEstimateAccuracySnapshots = vi.fn();
+const mockUseAuthSession = vi.fn();
 
 vi.mock('@/components/fund/add-sip-plan-dialog', () => ({
   AddSipPlanDialog: () => <div data-testid="add-sip-plan-dialog" />,
@@ -24,10 +25,7 @@ vi.mock('@/components/fund/transaction-list', () => ({
 }));
 
 vi.mock('@/lib/auth/auth-context', () => ({
-  useAuthSession: () => ({
-    userId: null,
-    cloudClient: null,
-  }),
+  useAuthSession: () => mockUseAuthSession(),
 }));
 
 vi.mock('@/lib/hooks/use-fund-quotes', () => ({
@@ -57,6 +55,13 @@ const noop = vi.fn();
 
 describe('FundDetailContent estimate confidence integration', () => {
   beforeEach(() => {
+    mockUseAuthSession.mockReturnValue({
+      userId: null,
+      cloudClient: null,
+      accuracyStore: {
+        loadSnapshots: () => mockLoadEstimateAccuracySnapshots(),
+      },
+    });
     mockUseFundQuotes.mockReturnValue({
       quotes: [
         {
@@ -107,6 +112,69 @@ describe('FundDetailContent estimate confidence integration', () => {
       expect(screen.getByText('未知')).toBeTruthy();
       expect(screen.getByText('0 / 0')).toBeTruthy();
       expect(screen.getByText('暂无足够已收敛样本，估值可信度暂不可判断。')).toBeTruthy();
+    });
+  });
+
+  it('passes the auth accuracy store into useFundQuotes and reads summary snapshots from that store', async () => {
+    const accuracyStore = {
+      loadSnapshots: vi.fn(() => [
+        {
+          id: 's-1',
+          fundCode: '000001',
+          fundName: '测试基金',
+          quoteUpdatedAt: '2026-04-10 14:30',
+          tradingDate: '2026-04-10',
+          estimatedNav: 1.004,
+          finalNav: 1,
+          absoluteErrorRate: 0.004,
+          resolvedAt: '2026-04-10T15:30:00.000Z',
+          createdAt: '2026-04-10T14:30:00.000Z',
+          updatedAt: '2026-04-10T15:30:00.000Z',
+        },
+        {
+          id: 's-2',
+          fundCode: '000001',
+          fundName: '测试基金',
+          quoteUpdatedAt: '2026-04-11 14:30',
+          tradingDate: '2026-04-11',
+          estimatedNav: 1.005,
+          finalNav: 1,
+          absoluteErrorRate: 0.005,
+          resolvedAt: '2026-04-11T15:30:00.000Z',
+          createdAt: '2026-04-11T14:30:00.000Z',
+          updatedAt: '2026-04-11T15:30:00.000Z',
+        },
+        {
+          id: 's-3',
+          fundCode: '000001',
+          fundName: '测试基金',
+          quoteUpdatedAt: '2026-04-12 14:30',
+          tradingDate: '2026-04-12',
+          estimatedNav: 1.003,
+          finalNav: 1,
+          absoluteErrorRate: 0.003,
+          resolvedAt: '2026-04-12T15:30:00.000Z',
+          createdAt: '2026-04-12T14:30:00.000Z',
+          updatedAt: '2026-04-12T15:30:00.000Z',
+        },
+      ]),
+    };
+    mockUseAuthSession.mockReturnValue({
+      userId: 'user-1',
+      cloudClient: { kind: 'watchlist-cloud' },
+      accuracyStore,
+    });
+
+    render(<FundDetailContent code="000001" />);
+
+    expect(mockUseFundQuotes).toHaveBeenCalledWith(['000001'], undefined, undefined, {
+      accuracyStore,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('中')).toBeTruthy();
+      expect(screen.getByText('3 / 3')).toBeTruthy();
+      expect(screen.getByText('0.40%')).toBeTruthy();
     });
   });
 
