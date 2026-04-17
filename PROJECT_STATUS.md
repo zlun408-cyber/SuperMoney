@@ -90,15 +90,21 @@
 - 已完成：修复登录态详情页首次 materialize 定投后未立即回写云端的问题
 - 已完成：新增登录态云端执行记录路径 E2E（生成 -> 删除 -> skipped -> 刷新不重放）
 - 已完成：历史净值获取失败时的降级提示与手填保存路径验证
+- 已完成：交易录入表单新建态默认自动净值、失败后手填降级，编辑态显式“重新获取净值”
+- 已完成：定投自动生成去重回归测试补齐（缺 execution record 回填 / 同日多计划独立执行）
+- 已完成：交易表单自动净值成功 / 失败两条浏览器回归验证
 - 已完成：estimate accuracy baseline（本地样本采集 / 收敛 / 聚合与可信度分级）
 - 已完成：基金详情页 estimate confidence panel，展示估值可信度、收敛样本数与平均绝对误差
 - 已完成：`/accuracy` 内部准确度看板，支持读取本地 estimate accuracy 样本并按基金汇总误差表现
 - 已完成：新增 `/accuracy` E2E，覆盖 localStorage 种数后的指标卡与基金行可见性
+- 已完成：高阶 accuracy iteration（按交易日窗口、样本量、误差分布拆分可信度阈值）
+- 已完成：异常基金排查视图与 `/accuracy` 可信度分层规则说明
+- 已完成：修复 `npm run test:e2e` 默认并发下用例完成后不退出的问题，Playwright 默认 workers 收紧为 1
 
 ## 当前主线
-- 当前正在推进：估值准确度基线后的高阶 accuracy iteration
-- 当前完成到：第四阶段账本可读性增强、定投计划与执行回放稳定性、历史净值降级路径、estimate accuracy baseline、详情页 estimate confidence panel、`/accuracy` 准确度看板、准确度看板 E2E 回归验证
-- 下一步：进入高阶 accuracy iteration：扩展跨交易日样本覆盖、误差分布/异常基金排查、按数据源与时间窗口分层的可信度阈值校准
+- 当前正在推进：P0 收尾后的范围收紧与阶段切换
+- 当前完成到：第四阶段账本可读性增强、定投计划与执行回放稳定性、历史净值降级路径、estimate accuracy baseline、详情页 estimate confidence panel、`/accuracy` 准确度看板、准确度看板 E2E 回归验证、高阶可信度阈值迭代、异常基金排查视图、`/accuracy` 分层规则说明
+- 下一步：冻结 accuracy P0 功能面，把样本导出 / 云端化 / 跨设备留存降级到 P1 再评估
 
 ## 关键决策
 - 项目目录名：`SuperFinance`
@@ -117,6 +123,7 @@
 - 本地落地时使用 `.env.local` 提供 `NEXT_PUBLIC_SUPABASE_URL` 与 `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - 第四阶段采用“轻量双增强”方案：先增强收益拆分卡片，再增强交易记录列表可读性
 - estimate accuracy 第一版采用本地 localStorage 样本基线，先验证采集、收敛、聚合和可信度展示，再进入跨周期/分层校准迭代
+- P0 截止线明确为：详情页可信度判断、`/accuracy` 解释与异常基金排查即可；样本导出、云端同步、跨设备留存不纳入 P0
 - 推荐技术方向：Next.js + TypeScript + Tailwind CSS + localStorage
 - 当前主分支：`master`
 - 当前开发目录：项目主目录 `/Users/zhanglun/Desktop/SuperFinance`

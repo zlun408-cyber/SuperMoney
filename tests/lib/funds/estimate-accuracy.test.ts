@@ -70,7 +70,57 @@ describe('estimate accuracy domain', () => {
     ]);
 
     expect(summary.averageAbsoluteErrorRate).toBeCloseTo(0.006333333, 6);
+    expect(summary.resolvedTradingDayCount).toBe(3);
+    expect(summary.highErrorResolvedSampleCount).toBe(0);
     expect(gradeEstimateConfidence(summary)).toBe('medium');
+  });
+
+  it('returns high only when trading-day coverage, sample volume, and high-error share all satisfy the conservative gates', () => {
+    const summary = summarizeEstimateAccuracy([
+      { id: 'a', fundCode: '000001', fundName: '基金A', quoteUpdatedAt: '2026-04-10 14:30', tradingDate: '2026-04-10', estimatedNav: 1.001, finalNav: 1.00, absoluteErrorRate: 0.001, resolvedAt: '2026-04-10T15:30:00.000Z', createdAt: '2026-04-10T14:30:00.000Z', updatedAt: '2026-04-10T15:30:00.000Z' },
+      { id: 'b', fundCode: '000001', fundName: '基金A', quoteUpdatedAt: '2026-04-11 14:30', tradingDate: '2026-04-11', estimatedNav: 1.002, finalNav: 1.00, absoluteErrorRate: 0.002, resolvedAt: '2026-04-11T15:30:00.000Z', createdAt: '2026-04-11T14:30:00.000Z', updatedAt: '2026-04-11T15:30:00.000Z' },
+      { id: 'c', fundCode: '000001', fundName: '基金A', quoteUpdatedAt: '2026-04-12 14:30', tradingDate: '2026-04-12', estimatedNav: 1.003, finalNav: 1.00, absoluteErrorRate: 0.003, resolvedAt: '2026-04-12T15:30:00.000Z', createdAt: '2026-04-12T14:30:00.000Z', updatedAt: '2026-04-12T15:30:00.000Z' },
+      { id: 'd', fundCode: '000001', fundName: '基金A', quoteUpdatedAt: '2026-04-13 14:30', tradingDate: '2026-04-13', estimatedNav: 0.999, finalNav: 1.00, absoluteErrorRate: 0.001, resolvedAt: '2026-04-13T15:30:00.000Z', createdAt: '2026-04-13T14:30:00.000Z', updatedAt: '2026-04-13T15:30:00.000Z' },
+      { id: 'e', fundCode: '000001', fundName: '基金A', quoteUpdatedAt: '2026-04-14 14:30', tradingDate: '2026-04-14', estimatedNav: 0.998, finalNav: 1.00, absoluteErrorRate: 0.002, resolvedAt: '2026-04-14T15:30:00.000Z', createdAt: '2026-04-14T14:30:00.000Z', updatedAt: '2026-04-14T15:30:00.000Z' },
+      { id: 'f', fundCode: '000001', fundName: '基金A', quoteUpdatedAt: '2026-04-15 14:30', tradingDate: '2026-04-15', estimatedNav: 1.001, finalNav: 1.00, absoluteErrorRate: 0.001, resolvedAt: '2026-04-15T15:30:00.000Z', createdAt: '2026-04-15T14:30:00.000Z', updatedAt: '2026-04-15T15:30:00.000Z' },
+    ]);
+
+    expect(summary.resolvedTradingDayCount).toBe(6);
+    expect(summary.highErrorResolvedSampleCount).toBe(0);
+    expect(summary.averageAbsoluteErrorRate).toBeCloseTo(0.001666666, 6);
+    expect(gradeEstimateConfidence(summary)).toBe('high');
+  });
+
+  it('downgrades to low when resolved samples are concentrated in too few trading days', () => {
+    const summary = summarizeEstimateAccuracy([
+      { id: 'a', fundCode: '000001', fundName: '基金A', quoteUpdatedAt: '2026-04-10 10:30', tradingDate: '2026-04-10', estimatedNav: 1.001, finalNav: 1.00, absoluteErrorRate: 0.001, resolvedAt: '2026-04-10T11:00:00.000Z', createdAt: '2026-04-10T10:30:00.000Z', updatedAt: '2026-04-10T11:00:00.000Z' },
+      { id: 'b', fundCode: '000001', fundName: '基金A', quoteUpdatedAt: '2026-04-10 14:30', tradingDate: '2026-04-10', estimatedNav: 1.002, finalNav: 1.00, absoluteErrorRate: 0.002, resolvedAt: '2026-04-10T15:30:00.000Z', createdAt: '2026-04-10T14:30:00.000Z', updatedAt: '2026-04-10T15:30:00.000Z' },
+      { id: 'c', fundCode: '000001', fundName: '基金A', quoteUpdatedAt: '2026-04-11 10:30', tradingDate: '2026-04-11', estimatedNav: 1.001, finalNav: 1.00, absoluteErrorRate: 0.001, resolvedAt: '2026-04-11T11:00:00.000Z', createdAt: '2026-04-11T10:30:00.000Z', updatedAt: '2026-04-11T11:00:00.000Z' },
+      { id: 'd', fundCode: '000001', fundName: '基金A', quoteUpdatedAt: '2026-04-11 14:30', tradingDate: '2026-04-11', estimatedNav: 1.002, finalNav: 1.00, absoluteErrorRate: 0.002, resolvedAt: '2026-04-11T15:30:00.000Z', createdAt: '2026-04-11T14:30:00.000Z', updatedAt: '2026-04-11T15:30:00.000Z' },
+      { id: 'e', fundCode: '000001', fundName: '基金A', quoteUpdatedAt: '2026-04-11 14:45', tradingDate: '2026-04-11', estimatedNav: 1.001, finalNav: 1.00, absoluteErrorRate: 0.001, resolvedAt: '2026-04-11T15:45:00.000Z', createdAt: '2026-04-11T14:45:00.000Z', updatedAt: '2026-04-11T15:45:00.000Z' },
+      { id: 'f', fundCode: '000001', fundName: '基金A', quoteUpdatedAt: '2026-04-10 14:45', tradingDate: '2026-04-10', estimatedNav: 1.001, finalNav: 1.00, absoluteErrorRate: 0.001, resolvedAt: '2026-04-10T15:45:00.000Z', createdAt: '2026-04-10T14:45:00.000Z', updatedAt: '2026-04-10T15:45:00.000Z' },
+    ]);
+
+    expect(summary.resolvedSampleCount).toBe(6);
+    expect(summary.resolvedTradingDayCount).toBe(2);
+    expect(summary.averageAbsoluteErrorRate).toBeCloseTo(0.001333333, 6);
+    expect(gradeEstimateConfidence(summary)).toBe('low');
+  });
+
+  it('downgrades to low when too many resolved samples fall into the high-error tail', () => {
+    const summary = summarizeEstimateAccuracy([
+      { id: 'a', fundCode: '000001', fundName: '基金A', quoteUpdatedAt: '2026-04-10 14:30', tradingDate: '2026-04-10', estimatedNav: 1.002, finalNav: 1.00, absoluteErrorRate: 0.002, resolvedAt: '2026-04-10T15:30:00.000Z', createdAt: '2026-04-10T14:30:00.000Z', updatedAt: '2026-04-10T15:30:00.000Z' },
+      { id: 'b', fundCode: '000001', fundName: '基金A', quoteUpdatedAt: '2026-04-11 14:30', tradingDate: '2026-04-11', estimatedNav: 1.012, finalNav: 1.00, absoluteErrorRate: 0.012, resolvedAt: '2026-04-11T15:30:00.000Z', createdAt: '2026-04-11T14:30:00.000Z', updatedAt: '2026-04-11T15:30:00.000Z' },
+      { id: 'c', fundCode: '000001', fundName: '基金A', quoteUpdatedAt: '2026-04-12 14:30', tradingDate: '2026-04-12', estimatedNav: 1.002, finalNav: 1.00, absoluteErrorRate: 0.002, resolvedAt: '2026-04-12T15:30:00.000Z', createdAt: '2026-04-12T14:30:00.000Z', updatedAt: '2026-04-12T15:30:00.000Z' },
+      { id: 'd', fundCode: '000001', fundName: '基金A', quoteUpdatedAt: '2026-04-13 14:30', tradingDate: '2026-04-13', estimatedNav: 1.013, finalNav: 1.00, absoluteErrorRate: 0.013, resolvedAt: '2026-04-13T15:30:00.000Z', createdAt: '2026-04-13T14:30:00.000Z', updatedAt: '2026-04-13T15:30:00.000Z' },
+      { id: 'e', fundCode: '000001', fundName: '基金A', quoteUpdatedAt: '2026-04-14 14:30', tradingDate: '2026-04-14', estimatedNav: 1.002, finalNav: 1.00, absoluteErrorRate: 0.002, resolvedAt: '2026-04-14T15:30:00.000Z', createdAt: '2026-04-14T14:30:00.000Z', updatedAt: '2026-04-14T15:30:00.000Z' },
+      { id: 'f', fundCode: '000001', fundName: '基金A', quoteUpdatedAt: '2026-04-15 14:30', tradingDate: '2026-04-15', estimatedNav: 1.012, finalNav: 1.00, absoluteErrorRate: 0.012, resolvedAt: '2026-04-15T15:30:00.000Z', createdAt: '2026-04-15T14:30:00.000Z', updatedAt: '2026-04-15T15:30:00.000Z' },
+    ]);
+
+    expect(summary.resolvedTradingDayCount).toBe(6);
+    expect(summary.highErrorResolvedSampleCount).toBe(3);
+    expect(summary.averageAbsoluteErrorRate).toBeCloseTo(0.007166666, 6);
+    expect(gradeEstimateConfidence(summary)).toBe('low');
   });
 
   it('returns low when there are resolved samples but not enough for medium', () => {
@@ -134,6 +184,8 @@ describe('estimate accuracy domain', () => {
       fundCode: '',
       sampleCount: 0,
       resolvedSampleCount: 0,
+      resolvedTradingDayCount: 0,
+      highErrorResolvedSampleCount: 0,
       averageAbsoluteErrorRate: null,
       latestQuoteUpdatedAt: null,
       latestResolvedAt: null,

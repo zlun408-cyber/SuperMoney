@@ -9,6 +9,8 @@ const accuracySummary: EstimateAccuracySummary = {
   fundCode: '000001',
   sampleCount: 8,
   resolvedSampleCount: 6,
+  resolvedTradingDayCount: 6,
+  highErrorResolvedSampleCount: 0,
   averageAbsoluteErrorRate: 0.0042,
   latestQuoteUpdatedAt: '2026-04-13T08:00:00.000Z',
   latestResolvedAt: '2026-04-12T08:00:00.000Z',

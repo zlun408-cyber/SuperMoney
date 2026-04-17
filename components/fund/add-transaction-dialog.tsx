@@ -97,7 +97,12 @@ function applyTransactionToForm(
   setters.setFee(values.fee);
 }
 
-function resolveTransaction(input: TransactionFormInput): { errors: FieldErrors; transaction: FundTransaction | null } {
+function resolveTransaction(
+  input: TransactionFormInput,
+  options?: {
+    resolvedNav?: number | null;
+  }
+): { errors: FieldErrors; transaction: FundTransaction | null } {
   const errors: FieldErrors = {};
   if (!input.tradeDate) {
     errors.tradeDate = '请选择交易日期';
@@ -111,7 +116,7 @@ function resolveTransaction(input: TransactionFormInput): { errors: FieldErrors;
   }
 
   if (input.type !== 'cash_dividend') {
-    const nav = Number(input.nav);
+    const nav = options?.resolvedNav ?? Number(input.nav);
 
     if (!Number.isFinite(nav) || nav <= 0) {
       errors.nav = '请输入大于 0 的净值';
@@ -157,7 +162,7 @@ function resolveTransaction(input: TransactionFormInput): { errors: FieldErrors;
     };
   }
 
-  const nav = Number(input.nav);
+  const nav = options?.resolvedNav ?? Number(input.nav);
 
   if (input.type === 'buy') {
     return {
@@ -229,6 +234,7 @@ export function AddTransactionDialog({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [businessError, setBusinessError] = useState<string | null>(null);
   const [navHint, setNavHint] = useState<string | null>(null);
+  const [isNavRefreshRequested, setIsNavRefreshRequested] = useState(false);
   const { state: autoNavState, fetchNav, reset: resetAutoNav } = useAutoNav();
 
   useEffect(() => {
@@ -237,6 +243,7 @@ export function AddTransactionDialog({
       setFieldErrors({});
       setBusinessError(null);
       setNavHint(null);
+      setIsNavRefreshRequested(false);
       resetAutoNav();
       setOpen(false);
       return;
@@ -246,15 +253,19 @@ export function AddTransactionDialog({
     setFieldErrors({});
     setBusinessError(null);
     setNavHint(null);
+    setIsNavRefreshRequested(false);
     resetAutoNav();
   }, [editingTransaction]);
 
   const isEditing = editingTransaction !== null;
   const isFormOpen = isEditing || open;
   const usesNav = type !== 'cash_dividend';
+  const resolvedAutoNav = !isEditing && usesNav && autoNavState.error === null ? autoNavState.nav : null;
+  const shouldShowManualNavInput = usesNav && (isEditing || autoNavState.error !== null);
   const amountLabel = type === 'sell' ? '份额' : '金额';
   const title = isEditing ? '编辑交易记录' : '交易记录';
   const description = isEditing ? '修改已有交易记录。' : '添加买入、卖出、现金分红或红利再投资记录。';
+  const navInputId = isEditing ? 'transaction-nav-edit' : 'transaction-nav-create';
 
   useEffect(() => {
     if (!usesNav || !tradeDate || isEditing) {
@@ -267,13 +278,32 @@ export function AddTransactionDialog({
   }, [usesNav, tradeDate, period, isEditing, fundCode]);
 
   useEffect(() => {
-    if (autoNavState.nav && !nav && !isEditing) {
-      setNav(String(autoNavState.nav));
-    }
     if (autoNavState.effectiveDate) {
       setNavHint(autoNavState.effectiveDate === tradeDate ? null : `净值日期: ${autoNavState.effectiveDate}`);
     }
-  }, [autoNavState.nav, autoNavState.effectiveDate, nav, isEditing, tradeDate]);
+
+    if (!isEditing || !isNavRefreshRequested) {
+      return;
+    }
+
+    if (autoNavState.nav) {
+      setNav(String(autoNavState.nav));
+      setFieldErrors((current) => {
+        if (!current.nav) {
+          return current;
+        }
+
+        const { nav: _nav, ...rest } = current;
+        return rest;
+      });
+      setIsNavRefreshRequested(false);
+      return;
+    }
+
+    if (autoNavState.error) {
+      setIsNavRefreshRequested(false);
+    }
+  }, [autoNavState.nav, autoNavState.effectiveDate, autoNavState.error, isEditing, isNavRefreshRequested, tradeDate]);
 
   const getCurrentFormInput = (): TransactionFormInput => ({
     id: editingTransaction?.id,
@@ -285,16 +315,35 @@ export function AddTransactionDialog({
     fee,
   });
 
+  const getResolvedNav = (nextInput: TransactionFormInput) => {
+    if (nextInput.type === 'cash_dividend') {
+      return null;
+    }
+
+    if (!isEditing && resolvedAutoNav !== null) {
+      return resolvedAutoNav;
+    }
+
+    return null;
+  };
+
   const syncFieldErrors = (nextInput: TransactionFormInput) => {
     if (Object.keys(fieldErrors).length === 0) {
       return;
     }
 
-    setFieldErrors(resolveTransaction(nextInput).errors);
+    setFieldErrors(
+      resolveTransaction(nextInput, {
+        resolvedNav: getResolvedNav(nextInput),
+      }).errors,
+    );
   };
 
   const handleSave = () => {
-    const { errors, transaction } = resolveTransaction(getCurrentFormInput());
+    const currentInput = getCurrentFormInput();
+    const { errors, transaction } = resolveTransaction(currentInput, {
+      resolvedNav: getResolvedNav(currentInput),
+    });
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       setBusinessError(null);
@@ -380,6 +429,9 @@ export function AddTransactionDialog({
                 const nextType = event.target.value as FundTransactionType;
                 setType(nextType);
                 setBusinessError(null);
+                if (!isEditing) {
+                  setNav('');
+                }
                 syncFieldErrors({
                   ...getCurrentFormInput(),
                   type: nextType,
@@ -404,6 +456,9 @@ export function AddTransactionDialog({
                 const nextTradeDate = event.target.value;
                 setTradeDate(nextTradeDate);
                 setBusinessError(null);
+                if (!isEditing) {
+                  setNav('');
+                }
                 syncFieldErrors({
                   ...getCurrentFormInput(),
                   tradeDate: nextTradeDate,
@@ -418,7 +473,18 @@ export function AddTransactionDialog({
             <select
               className="rounded-lg border border-slate-300 bg-white px-3 py-2"
               value={period}
-              onChange={(event) => setPeriod(event.target.value as FundTradePeriod)}
+              onChange={(event) => {
+                const nextPeriod = event.target.value as FundTradePeriod;
+                setPeriod(nextPeriod);
+                setBusinessError(null);
+                if (!isEditing) {
+                  setNav('');
+                }
+                syncFieldErrors({
+                  ...getCurrentFormInput(),
+                  period: nextPeriod,
+                });
+              }}
             >
               <option value="before_1500">15 点前</option>
               <option value="after_1500">15 点后</option>
@@ -466,34 +532,79 @@ export function AddTransactionDialog({
           </label>
 
           {usesNav ? (
-            <label className="grid gap-1 text-sm text-slate-700">
-              <span>净值</span>
-              <div className="relative">
-                <input
-                  aria-invalid={fieldErrors.nav ? 'true' : 'false'}
-                  className="rounded-lg border border-slate-300 px-3 py-2 w-full"
-                  inputMode="decimal"
-                  value={nav}
-                  onChange={(event) => {
-                    const nextNav = event.target.value;
-                    setNav(nextNav);
-                    setBusinessError(null);
-                    syncFieldErrors({
-                      ...getCurrentFormInput(),
-                      nav: nextNav,
-                    });
-                  }}
-                />
-                {autoNavState.loading ? (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">
-                    获取中...
-                  </span>
-                ) : null}
-              </div>
-              {fieldErrors.nav ? <p className="text-sm text-rose-600">{fieldErrors.nav}</p> : null}
-              {autoNavState.error ? <p className="text-sm text-amber-600">{autoNavState.error}</p> : null}
-              {navHint ? <p className="text-xs text-slate-500">{navHint}</p> : null}
-            </label>
+            <div className="grid gap-2 text-sm text-slate-700">
+              {!isEditing && !tradeDate ? (
+                <div className="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-3 text-sm text-slate-500">
+                  选择交易日期后自动获取净值
+                </div>
+              ) : null}
+
+              {!isEditing && tradeDate && autoNavState.loading ? (
+                <div className="rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm text-slate-500">
+                  正在自动获取净值...
+                </div>
+              ) : null}
+
+              {!isEditing && resolvedAutoNav !== null ? (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3">
+                  <p className="font-medium text-emerald-900">已自动获取净值</p>
+                  <p className="mt-1 text-base font-semibold text-emerald-900">{resolvedAutoNav.toFixed(4)}</p>
+                  {navHint ? <p className="mt-1 text-xs text-emerald-800">{navHint}</p> : null}
+                </div>
+              ) : null}
+
+              {shouldShowManualNavInput ? (
+                <label className="grid gap-1 text-sm text-slate-700" htmlFor={navInputId}>
+                  <span>净值</span>
+                  <div className="relative">
+                    <input
+                      id={navInputId}
+                      aria-label="净值"
+                      aria-invalid={fieldErrors.nav ? 'true' : 'false'}
+                      className="rounded-lg border border-slate-300 px-3 py-2 w-full"
+                      inputMode="decimal"
+                      value={nav}
+                      onChange={(event) => {
+                        const nextNav = event.target.value;
+                        setNav(nextNav);
+                        setBusinessError(null);
+                        syncFieldErrors({
+                          ...getCurrentFormInput(),
+                          nav: nextNav,
+                        });
+                      }}
+                    />
+                    {isEditing && autoNavState.loading ? (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">
+                        获取中...
+                      </span>
+                    ) : null}
+                  </div>
+                  {fieldErrors.nav ? <p className="text-sm text-rose-600">{fieldErrors.nav}</p> : null}
+                  {autoNavState.error ? <p className="text-sm text-amber-600">{autoNavState.error}</p> : null}
+                  {navHint ? <p className="text-xs text-slate-500">{navHint}</p> : null}
+                </label>
+              ) : null}
+
+              {isEditing ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700"
+                    onClick={() => {
+                      setBusinessError(null);
+                      setIsNavRefreshRequested(true);
+                      fetchNav(fundCode, tradeDate, period);
+                    }}
+                    type="button"
+                  >
+                    重新获取净值
+                  </button>
+                  {!autoNavState.loading ? (
+                    <p className="text-xs text-slate-500">编辑时不会自动覆盖已保存净值。</p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
           ) : null}
 
           {businessError ? <p className="text-sm text-rose-600">{businessError}</p> : null}

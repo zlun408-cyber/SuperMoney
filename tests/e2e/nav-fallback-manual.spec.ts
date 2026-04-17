@@ -7,6 +7,65 @@ const seededWatchlist = [
   },
 ];
 
+test('saves a transaction with auto-fetched nav and no manual nav entry', async ({ page }) => {
+  await page.addInitScript((watchlist) => {
+    if (!window.sessionStorage.getItem('nav-success-seeded')) {
+      window.localStorage.setItem('super-finance-watchlist', JSON.stringify(watchlist));
+      window.sessionStorage.setItem('nav-success-seeded', '1');
+    }
+  }, seededWatchlist);
+
+  await page.route('**/api/funds/quote?codes=000001', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        quotes: [
+          {
+            code: '000001',
+            name: '基金A',
+            estimatedNav: 1.25,
+            changeRate: 0.88,
+            updatedAt: '2026-04-10 14:30',
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.route('**/api/funds/nav**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: true,
+        data: {
+          fundCode: '000001',
+          date: '2026-04-08',
+          nav: 1.2345,
+          source: 'api',
+          updatedAt: '2026-04-08T15:00:00.000Z',
+        },
+      }),
+    });
+  });
+
+  await page.goto('/fund/000001');
+  await page.waitForLoadState('networkidle');
+
+  await page.getByRole('button', { name: '添加交易记录' }).click();
+  await page.getByLabel('交易日期').fill('2026-04-08');
+  await page.getByLabel('金额').fill('100');
+
+  await expect(page.getByText('已自动获取净值')).toBeVisible();
+  await expect(page.getByText('1.2345')).toBeVisible();
+
+  await page.getByRole('button', { name: '保存记录' }).click();
+
+  await expect(page.getByText('来源：手动录入')).toBeVisible();
+  await expect(page.getByText('金额 100')).toBeVisible();
+});
+
 test('allows manual nav entry when historical nav lookup fails', async ({ page }) => {
   await page.addInitScript((watchlist) => {
     if (!window.sessionStorage.getItem('nav-fallback-seeded')) {

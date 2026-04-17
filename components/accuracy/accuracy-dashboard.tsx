@@ -7,6 +7,10 @@ import {
   type EstimateAccuracyAdjustmentSimulationFundInsight,
 } from '@/lib/funds/estimate-accuracy-adjustment';
 import {
+  buildEstimateAccuracyAbnormalInvestigationItems,
+  type EstimateAccuracyAbnormalTag,
+} from '@/lib/funds/estimate-accuracy-abnormal-investigation';
+import {
   ESTIMATE_ADJUSTMENT_DECISIONS_STORAGE_KEY,
   ESTIMATE_ADJUSTMENT_DECISIONS_UPDATED_EVENT,
 } from '@/lib/funds/estimate-adjustment-policy';
@@ -148,6 +152,24 @@ const ERROR_RATE_BUCKETS = [
   },
 ] as const;
 
+const CONFIDENCE_RULE_CARDS = [
+  {
+    testId: 'accuracy-confidence-rule-window',
+    title: '交易日覆盖',
+    description: '先看已收敛样本是否覆盖足够交易日，避免单日偶然偏差直接推高可信度。',
+  },
+  {
+    testId: 'accuracy-confidence-rule-sample',
+    title: '已收敛样本量',
+    description: '只把拿到最终净值的样本计入可信度判断；样本量不足时会保守下调等级。',
+  },
+  {
+    testId: 'accuracy-confidence-rule-distribution',
+    title: '高误差样本占比',
+    description: '检查误差尾部风险；即使平均误差可接受，高误差占比偏高也不能给高可信度。',
+  },
+] as const;
+
 const QUOTE_UPDATED_LOCAL_TIME_FORMAT = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/;
 const ADJUSTMENT_FUND_TIME_BUCKETS = ['盘前 / 上午', '午后', '尾盘', '收盘后', '未知'] as const;
 const formatPercent = (value: number | null): string => {
@@ -202,6 +224,18 @@ const getDecisionButtonClassName = (active: boolean): string =>
       ? 'border-blue-900 bg-blue-900 text-white shadow-sm'
       : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
   }`;
+
+const getAbnormalTagClassName = (tag: EstimateAccuracyAbnormalTag): string => {
+  if (tag === '连续偏差') {
+    return 'rounded-full bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-700';
+  }
+
+  if (tag === '高误差') {
+    return 'rounded-full bg-orange-100 px-2.5 py-1 text-xs font-medium text-orange-700';
+  }
+
+  return 'rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700';
+};
 
 const getQuoteUpdatedHour = (quoteUpdatedAt: string): number | null => {
   const localMatch = quoteUpdatedAt.match(QUOTE_UPDATED_LOCAL_TIME_FORMAT);
@@ -750,6 +784,10 @@ export function AccuracyDashboard() {
   );
   const errorDistribution = useMemo(() => buildErrorDistribution(snapshots), [snapshots]);
   const unresolvedItems = useMemo(() => buildUnresolvedItems(snapshots), [snapshots]);
+  const abnormalInvestigationItems = useMemo(
+    () => buildEstimateAccuracyAbnormalInvestigationItems(snapshots),
+    [snapshots],
+  );
   const adjustmentFundDetails = useMemo(() => buildAdjustmentFundDetails(snapshots), [snapshots]);
   const diagnostics = useMemo(
     () => summarizeEstimateAccuracyDiagnostics(snapshots, 5),
@@ -1017,6 +1055,37 @@ export function AccuracyDashboard() {
         </article>
       </section>
 
+      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 px-5 py-4">
+          <h2 className="text-lg font-semibold text-slate-900">估值可信度分层规则</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            当前可信度会同时受交易日窗口、已收敛样本量与误差尾部分布约束。
+          </p>
+        </div>
+
+        <div className="grid gap-4 p-5 lg:grid-cols-3">
+          {CONFIDENCE_RULE_CARDS.map((card) => (
+            <article
+              key={card.title}
+              data-testid="accuracy-confidence-rule-card"
+              className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+            >
+              <h3
+                data-testid={card.testId}
+                className="text-sm font-semibold text-slate-900"
+              >
+                {card.title}
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600">{card.description}</p>
+            </article>
+          ))}
+        </div>
+
+        <div className="border-t border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-600">
+          最终等级按三层门槛中的最弱项决定；平均误差仍作为 high/medium 的上限约束。
+        </div>
+      </section>
+
       <section className="grid gap-4 lg:grid-cols-2">
         <article className="rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-200 px-5 py-4">
@@ -1089,6 +1158,66 @@ export function AccuracyDashboard() {
             </div>
           )}
         </article>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 px-5 py-4">
+          <h2 className="text-lg font-semibold text-slate-900">异常基金排查</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            合并连续偏差、高误差和未收敛样本，按异常严重度给出排查顺序。
+          </p>
+        </div>
+
+        {!hasLoadedSnapshots ? (
+          <div className="px-5 py-10 text-sm text-slate-500">正在读取异常基金排查数据…</div>
+        ) : abnormalInvestigationItems.length === 0 ? (
+          <div className="px-5 py-10 text-sm text-slate-500">暂无需要优先排查的异常基金</div>
+        ) : (
+          <div className="divide-y divide-slate-200">
+            {abnormalInvestigationItems.map((item) => (
+              <div
+                key={item.fundCode}
+                data-testid="accuracy-abnormal-row"
+                className="grid gap-4 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_180px_minmax(0,1.1fr)]"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium text-slate-900">{item.fundName}</p>
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                      {item.fundCode}
+                    </span>
+                    {item.tags.map((tag) => (
+                      <span key={tag} className={getAbnormalTagClassName(tag)}>
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-sm text-slate-500">
+                    {item.diagnosis} · 最近异常 {item.latestAbnormalDate ?? '暂无'}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-400">平均误差</p>
+                    <p className="mt-1 font-medium text-slate-900">
+                      {formatPercent(item.averageAbsoluteErrorRate)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-400">样本</p>
+                    <p className="mt-1 font-medium text-slate-900">
+                      {item.resolvedSampleCount} / +{item.unresolvedSampleCount}
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-400">排查建议</p>
+                  <p className="mt-1 text-sm text-slate-600">{item.suggestion}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">

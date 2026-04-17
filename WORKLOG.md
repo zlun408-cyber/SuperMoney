@@ -1,5 +1,26 @@
 # 工作日志
 
+## 2026-04-17（accuracy P0 收口与边界下调）
+- 做了：基于当前 accuracy 进展重新判断 P0 投入边界，明确不再继续扩展功能面
+- 做了：确认 P0 截止线为“详情页可信度判断 + `/accuracy` 分层解释 + 异常基金排查 + review/downgrade 预览收紧”
+- 做了：把 estimate accuracy 样本导出、云端同步、跨设备留存等能力统一下调为 P1，不再占用当前 P0 周期
+- 做了：同步更新 `NEXT_STEPS.md`、`PROJECT_STATUS.md`，使项目记录与当前真实范围一致
+- 做了：执行全量验证 `npm test`、`npm run test:e2e`、`npm run build`
+- 做了：定位 `npm run test:e2e` 在默认并发下“用例全绿但进程不退出”的收尾问题，确认 1/2 workers 稳定、默认并发会挂住
+- 做了：将 `playwright.config.ts` 默认 workers 收紧为 1，恢复 `npm run test:e2e` 的稳定 exit 0
+- 结论：accuracy 主线已经达到 P0 可交付标准，后续不再围绕准确度系统做无休止 polish
+- 下一步：转入下一个主线，或仅在需要时再回头评估 P1 的 accuracy 样本导出/上云路径
+
+## 2026-04-15（基金详情页交易表单净值与定投去重回归）
+- 做了：读取 `PROJECT_STATUS.md`、`WORKLOG.md`、`NEXT_STEPS.md` 恢复当前项目状态
+- 做了：输出并保存实现计划 `docs/superpowers/plans/2026-04-15-sip-dedupe-nav-form-redesign.md`
+- 做了：为交易录入表单新增组件测试，覆盖新建记录自动净值无需手填、自动净值失败手填降级、编辑态显式重新获取净值
+- 做了：重构 `components/fund/add-transaction-dialog.tsx` 的净值区域：新建态默认展示自动净值结果，失败后才展示手填净值输入；编辑态保留已保存净值并提供“重新获取净值”按钮
+- 做了：补齐定投自动生成去重边界测试，覆盖缺失 execution record 但自动交易已存在时只回填 `generated`、同日多计划独立生成
+- 做了：扩展 `tests/e2e/nav-fallback-manual.spec.ts`，新增自动净值成功且无需手填的浏览器回归路径，并保留失败手填降级路径
+- 结论：本轮重设计已把新建交易从“手填净值字段优先”调整为“自动净值优先、失败才手填”，并为定投去重关键边界补上回归保护
+- 下一步：运行全量验证并继续推进高阶 accuracy iteration
+
 ## 2026-03-25
 - 做了：创建 `SuperFinance` 项目文件夹
 - 做了：初始化进度管理文件

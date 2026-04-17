@@ -101,6 +101,69 @@ describe('materializeSipPlans', () => {
     expect(result.createdTransactions).toEqual([]);
     expect(result.updatedExecutionRecords).toEqual([skippedRecord]);
   });
+
+  it('repairs a missing execution record from an existing auto-generated transaction without creating a duplicate', () => {
+    const existingGeneratedTransaction: BuyTransaction = {
+      id: 'plan-1-2026-04-10',
+      type: 'buy',
+      amount: 100,
+      confirmedNav: 1.25,
+      placedDate: '2026-04-10',
+      placedPeriod: 'before_1500',
+      effectiveDate: '2026-04-10',
+      source: 'sip_plan',
+      sourcePlanId: 'plan-1',
+    };
+
+    const result = materializeSipPlans({
+      fundId: '000001',
+      plans: [plan],
+      transactions: [existingGeneratedTransaction],
+      executionRecords: [],
+      now: '2026-04-10T12:00:00.000Z',
+      resolveConfirmedNav: () => 1.33,
+    });
+
+    expect(result.createdTransactions).toEqual([]);
+    expect(result.updatedExecutionRecords).toEqual([
+      expect.objectContaining({
+        planId: 'plan-1',
+        executionDate: '2026-04-10',
+        status: 'generated',
+        transactionId: 'plan-1-2026-04-10',
+      }),
+    ]);
+  });
+
+  it('keeps same-day plans independent when materializing the same fund', () => {
+    const secondPlan: SipPlan = {
+      ...plan,
+      id: 'plan-2',
+    };
+
+    const result = materializeSipPlans({
+      fundId: '000001',
+      plans: [plan, secondPlan],
+      transactions: [],
+      executionRecords: [],
+      now: '2026-04-10T10:00:00.000Z',
+      resolveConfirmedNav: () => 1.25,
+    });
+
+    expect(result.createdTransactions).toHaveLength(2);
+    expect(result.createdTransactions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'plan-1-2026-04-10', sourcePlanId: 'plan-1' }),
+        expect.objectContaining({ id: 'plan-2-2026-04-10', sourcePlanId: 'plan-2' }),
+      ]),
+    );
+    expect(result.updatedExecutionRecords).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ planId: 'plan-1', executionDate: '2026-04-10', status: 'generated' }),
+        expect.objectContaining({ planId: 'plan-2', executionDate: '2026-04-10', status: 'generated' }),
+      ]),
+    );
+  });
 });
 
 describe('markSipExecutionSkippedAfterDeletion', () => {

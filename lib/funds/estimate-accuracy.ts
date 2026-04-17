@@ -16,6 +16,7 @@ const ABSOLUTE_TIME_FORMAT =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/;
 const CHINA_MARKET_TIMEZONE_OFFSET_HOURS = 8;
 const TRADING_DATE_FORMAT = /^(\d{4})-(\d{2})-(\d{2})$/;
+const HIGH_ERROR_RATE_THRESHOLD = 0.01;
 
 const isValidLocalDateTime = (
   year: number,
@@ -255,6 +256,10 @@ export const summarizeEstimateAccuracy = (
     (sum, snapshot) => sum + (snapshot.absoluteErrorRate ?? 0),
     0,
   );
+  const resolvedTradingDayCount = new Set(resolved.map((snapshot) => snapshot.tradingDate)).size;
+  const highErrorResolvedSampleCount = resolved.filter(
+    (snapshot) => (snapshot.absoluteErrorRate ?? 0) > HIGH_ERROR_RATE_THRESHOLD,
+  ).length;
 
   const latestQuoteUpdatedAt = snapshots.reduce<string | null>((latest, snapshot) => {
     return pickLatestTimestamp(latest, snapshot.quoteUpdatedAt, 'quoteUpdatedAt');
@@ -273,6 +278,8 @@ export const summarizeEstimateAccuracy = (
     fundCode: snapshots[0]?.fundCode ?? '',
     sampleCount: snapshots.length,
     resolvedSampleCount: resolved.length,
+    resolvedTradingDayCount,
+    highErrorResolvedSampleCount,
     averageAbsoluteErrorRate:
       resolved.length > 0 ? totalAbsoluteErrorRate / resolved.length : null,
     latestQuoteUpdatedAt,
@@ -287,30 +294,50 @@ export const gradeEstimateConfidence = (
     return 'unknown';
   }
 
-  if (
-    summary.resolvedSampleCount >= 5 &&
-    summary.averageAbsoluteErrorRate <= 0.003
-  ) {
+  const highErrorShare =
+    summary.resolvedSampleCount > 0
+      ? summary.highErrorResolvedSampleCount / summary.resolvedSampleCount
+      : 1;
+
+  let windowLevel: EstimateConfidenceLevel = 'low';
+  if (summary.resolvedTradingDayCount >= 6) {
+    windowLevel = 'high';
+  } else if (summary.resolvedTradingDayCount >= 3) {
+    windowLevel = 'medium';
+  }
+
+  let sampleLevel: EstimateConfidenceLevel = 'low';
+  if (summary.resolvedSampleCount >= 6) {
+    sampleLevel = 'high';
+  } else if (summary.resolvedSampleCount >= 3) {
+    sampleLevel = 'medium';
+  }
+
+  let distributionLevel: EstimateConfidenceLevel = 'low';
+  if (highErrorShare === 0) {
+    distributionLevel = 'high';
+  } else if (highErrorShare <= 0.2) {
+    distributionLevel = 'medium';
+  }
+
+  const rank: Record<EstimateConfidenceLevel, number> = {
+    unknown: 0,
+    low: 1,
+    medium: 2,
+    high: 3,
+  };
+  const weakestLevel = [windowLevel, sampleLevel, distributionLevel].reduce<EstimateConfidenceLevel>(
+    (current, candidate) => (rank[candidate] < rank[current] ? candidate : current),
+    'high',
+  );
+
+  if (summary.averageAbsoluteErrorRate <= 0.003 && weakestLevel === 'high') {
     return 'high';
   }
 
-  if (
-    summary.resolvedSampleCount >= 3 &&
-    summary.averageAbsoluteErrorRate <= 0.01
-  ) {
+  if (summary.averageAbsoluteErrorRate <= 0.01 && rank[weakestLevel] >= rank.medium) {
     return 'medium';
   }
 
-  if (
-    summary.resolvedSampleCount > 0 &&
-    summary.averageAbsoluteErrorRate > 0.01
-  ) {
-    return 'low';
-  }
-
-  if (summary.resolvedSampleCount > 0) {
-    return 'low';
-  }
-
-  return 'unknown';
+  return 'low';
 };

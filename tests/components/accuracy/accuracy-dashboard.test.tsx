@@ -47,6 +47,25 @@ describe('AccuracyDashboard', () => {
     expect(screen.queryByText('暂无估值准确度样本')).toBeNull();
   });
 
+  it('shows layered confidence rule explanations in the overview section', () => {
+    render(<AccuracyDashboard />);
+
+    expect(screen.getByText('估值可信度分层规则')).toBeTruthy();
+    expect(screen.getByText('当前可信度会同时受交易日窗口、已收敛样本量与误差尾部分布约束。')).toBeTruthy();
+
+    const ruleCards = screen.getAllByTestId('accuracy-confidence-rule-card');
+    expect(ruleCards).toHaveLength(3);
+    expect(screen.getByTestId('accuracy-confidence-rule-window')).toBeTruthy();
+    expect(screen.getByTestId('accuracy-confidence-rule-sample')).toBeTruthy();
+    expect(screen.getByTestId('accuracy-confidence-rule-distribution')).toBeTruthy();
+
+    expect(screen.getByText('交易日覆盖')).toBeTruthy();
+    expect(screen.getByText('已收敛样本量')).toBeTruthy();
+    expect(screen.getByText('高误差样本占比')).toBeTruthy();
+    expect(screen.getByText(/最终等级按三层门槛中的最弱项决定/)).toBeTruthy();
+    expect(screen.getByText(/平均误差仍作为 high\/medium 的上限约束/)).toBeTruthy();
+  });
+
   it('loads snapshots from storage, aggregates the overall summary, and sorts funds by average error descending', async () => {
     mockLoadEstimateAccuracySnapshots.mockReturnValue([
       {
@@ -176,6 +195,16 @@ describe('AccuracyDashboard', () => {
     expect(screen.getByText('2 条未收敛样本，涉及 2 只基金。')).toBeTruthy();
     expect(within(unresolvedRows[0]).getByText('000003')).toBeTruthy();
     expect(within(unresolvedRows[1]).getByText('000001')).toBeTruthy();
+
+    const abnormalRows = screen.getAllByTestId('accuracy-abnormal-row');
+    expect(abnormalRows).toHaveLength(3);
+    expect(within(abnormalRows[0]).getByText('000002')).toBeTruthy();
+    expect(within(abnormalRows[0]).getByText('连续偏差')).toBeTruthy();
+    expect(within(abnormalRows[0]).getByText('高误差')).toBeTruthy();
+    expect(within(abnormalRows[1]).getByText('000001')).toBeTruthy();
+    expect(within(abnormalRows[1]).getByText('未收敛')).toBeTruthy();
+    expect(within(abnormalRows[2]).getByText('000003')).toBeTruthy();
+    expect(within(abnormalRows[2]).getByText('未收敛')).toBeTruthy();
 
     const diagnosticRows = screen.getAllByTestId('accuracy-diagnostic-row');
     expect(diagnosticRows).toHaveLength(3);
@@ -446,6 +475,43 @@ describe('AccuracyDashboard', () => {
       expect(screen.getAllByText('0.50%')).toHaveLength(12);
       expect(screen.getAllByText('000001').length).toBeGreaterThan(0);
       expect(screen.getAllByTestId('accuracy-fund-row')).toHaveLength(1);
+    });
+  });
+
+  it('shows an empty state when there are no abnormal funds to investigate', async () => {
+    mockLoadEstimateAccuracySnapshots.mockReturnValue([
+      {
+        id: 'safe-1',
+        fundCode: '000010',
+        fundName: '正常基金',
+        quoteUpdatedAt: '2026-04-10 10:30',
+        tradingDate: '2026-04-10',
+        estimatedNav: 1.004,
+        finalNav: 1,
+        absoluteErrorRate: 0.004,
+        resolvedAt: '2026-04-10T15:30:00.000Z',
+        createdAt: '2026-04-10T10:30:00.000Z',
+        updatedAt: '2026-04-10T15:30:00.000Z',
+      },
+      {
+        id: 'safe-2',
+        fundCode: '000010',
+        fundName: '正常基金',
+        quoteUpdatedAt: '2026-04-11 10:30',
+        tradingDate: '2026-04-11',
+        estimatedNav: 0.996,
+        finalNav: 1,
+        absoluteErrorRate: 0.004,
+        resolvedAt: '2026-04-11T15:30:00.000Z',
+        createdAt: '2026-04-11T10:30:00.000Z',
+        updatedAt: '2026-04-11T15:30:00.000Z',
+      },
+    ]);
+
+    render(<AccuracyDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText('暂无需要优先排查的异常基金')).toBeTruthy();
     });
   });
 
@@ -986,6 +1052,79 @@ describe('AccuracyDashboard', () => {
     expect(within(executionRows[0]).getByText('建议降级观察')).toBeTruthy();
     expect(within(executionRows[0]).getByText(/最近回写样本连续恶化/)).toBeTruthy();
     expect(within(executionRows[0]).getAllByText('P0').length).toBeGreaterThan(0);
+  });
+
+  it('re-inserts validated funds into the recheck queue when validation feedback suggests review', async () => {
+    mockLoadEstimateAccuracySnapshots.mockReturnValue([
+      {
+        id: 'review-1',
+        fundCode: '000051',
+        fundName: '重点复核基金',
+        quoteUpdatedAt: '2026-04-10 10:30',
+        tradingDate: '2026-04-10',
+        estimatedNav: 1.04,
+        finalNav: 1,
+        absoluteErrorRate: 0.04,
+        resolvedAt: '2026-04-10T15:30:00.000Z',
+        createdAt: '2026-04-10T10:30:00.000Z',
+        updatedAt: '2026-04-10T15:30:00.000Z',
+      },
+      {
+        id: 'review-2',
+        fundCode: '000051',
+        fundName: '重点复核基金',
+        quoteUpdatedAt: '2026-04-11 10:30',
+        tradingDate: '2026-04-11',
+        estimatedNav: 1.02,
+        finalNav: 1,
+        absoluteErrorRate: 0.02,
+        resolvedAt: '2026-04-11T15:30:00.000Z',
+        createdAt: '2026-04-11T10:30:00.000Z',
+        updatedAt: '2026-04-11T15:30:00.000Z',
+      },
+      {
+        id: 'review-3',
+        fundCode: '000051',
+        fundName: '重点复核基金',
+        quoteUpdatedAt: '2026-04-12 10:30',
+        tradingDate: '2026-04-12',
+        estimatedNav: 1.01,
+        finalNav: 1,
+        absoluteErrorRate: 0.01,
+        resolvedAt: '2026-04-12T15:30:00.000Z',
+        createdAt: '2026-04-12T10:30:00.000Z',
+        updatedAt: '2026-04-12T15:30:00.000Z',
+      },
+    ]);
+
+    window.localStorage.setItem(
+      'super-finance-adjustment-fund-decisions',
+      JSON.stringify({
+        '000051': {
+          status: 'validated',
+          updatedAt: '2026-04-14T09:00:00.000Z',
+          history: [{ status: 'validated', updatedAt: '2026-04-14T09:00:00.000Z' }],
+        },
+      }),
+    );
+
+    render(<AccuracyDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('accuracy-adjustment-execution-filter-recheck')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByTestId('accuracy-adjustment-execution-filter-recheck'));
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('accuracy-adjustment-decision-row')).toHaveLength(1);
+    });
+
+    const executionRows = screen.getAllByTestId('accuracy-adjustment-decision-row');
+    expect(within(executionRows[0]).getByText('重点复核基金')).toBeTruthy();
+    expect(within(executionRows[0]).getByText('建议重点复核')).toBeTruthy();
+    expect(within(executionRows[0]).getByText(/修正仍有改善/)).toBeTruthy();
+    expect(within(executionRows[0]).getAllByText('P1').length).toBeGreaterThan(0);
   });
 
   it('filters reopened validated funds into a dedicated recheck queue', async () => {

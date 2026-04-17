@@ -49,10 +49,20 @@
 - [x] 补充 Supabase `fund_sip_executions` SQL 与 rollout checklist
 - [x] 补齐登录态云端执行记录路径 E2E / 集成验证
 - [x] 验证历史净值获取失败时的降级提示与手填切换体验
+- [x] 完成交易录入表单新建态默认自动净值、编辑态显式重新获取
+- [x] 补齐定投自动生成缺 execution record 回填 / 同日多计划去重边界回归
+- [x] 补齐交易表单自动净值成功 / 失败浏览器回归
 - [x] 落地 estimate accuracy baseline（本地样本采集 / 收敛 / 聚合与可信度分级）
 - [x] 在基金详情页落地 estimate confidence panel
 - [x] 落地 `/accuracy` 准确度看板
 - [x] 为 `/accuracy` 补齐 localStorage 种数 E2E
-- [ ] 设计高阶 accuracy iteration：按交易日窗口、样本量、误差分布拆分可信度阈值
-- [ ] 补齐异常基金排查视图：高误差基金、未收敛样本、连续偏差样本
-- [ ] 评估 estimate accuracy 样本从 localStorage 升级到云端/可导出的路径
+- [x] 完成高阶 accuracy iteration：按交易日窗口、样本量、误差分布拆分可信度阈值
+- [x] 补齐异常基金排查视图：高误差基金、未收敛样本、连续偏差样本
+- [ ] P1：评估 estimate accuracy 样本从 localStorage 升级到云端/可导出的路径
+
+## P0 收口结论
+
+- [x] P0 已覆盖：详情页可信度判断、`/accuracy` 看板、异常基金排查、可信度分层解释
+- [x] P0 已完成：review / downgrade 状态下修正预览收紧
+- [x] P0 已完成：`/accuracy` 暴露“为什么当前是 low / medium / high”的内部诊断说明
+- [ ] P1 再做：样本导出、云端同步、跨设备留存、更复杂的 accuracy 运营能力

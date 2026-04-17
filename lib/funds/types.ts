@@ -185,6 +185,8 @@ export interface EstimateAccuracySummary {
   fundCode: string;
   sampleCount: number;
   resolvedSampleCount: number;
+  resolvedTradingDayCount: number;
+  highErrorResolvedSampleCount: number;
   averageAbsoluteErrorRate: number | null;
   latestQuoteUpdatedAt: string | null;
   latestResolvedAt: string | null;
