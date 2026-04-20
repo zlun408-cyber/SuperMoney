@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import HomePage from '@/app/page';
@@ -7,6 +7,8 @@ const mockUseAuthSession = vi.fn();
 const mockUseWatchlist = vi.fn();
 const mockUseFundQuotes = vi.fn();
 const mockLoadEstimateIntradayPoints = vi.fn();
+const mockTrack = vi.fn();
+const mockTrackOnce = vi.fn();
 
 vi.mock('next/link', () => ({
   default: ({ children, href, ...props }: { children: React.ReactNode; href: string }) => (
@@ -26,6 +28,13 @@ vi.mock('@/lib/hooks/use-watchlist', () => ({
 
 vi.mock('@/lib/hooks/use-fund-quotes', () => ({
   useFundQuotes: (...args: unknown[]) => mockUseFundQuotes(...args),
+}));
+
+vi.mock('@/lib/hooks/use-intraday-analytics', () => ({
+  useIntradayAnalytics: () => ({
+    track: mockTrack,
+    trackOnce: mockTrackOnce,
+  }),
 }));
 
 vi.mock('@/lib/storage/estimate-intraday-storage', () => ({
@@ -65,6 +74,8 @@ afterEach(() => {
 
 describe('HomePage adjustment preview consistency', () => {
   beforeEach(() => {
+    mockTrack.mockReset();
+    mockTrackOnce.mockReset();
     mockUseAuthSession.mockReturnValue({
       userId: null,
       isAuthenticated: false,
@@ -151,6 +162,29 @@ describe('HomePage adjustment preview consistency', () => {
     expect(mockUseFundQuotes).toHaveBeenCalledWith(['000001'], undefined, undefined, {
       accuracyStore,
     });
+  });
+
+  it('tracks manual refresh clicks from the homepage', () => {
+    const refresh = vi.fn();
+    mockUseFundQuotes.mockReturnValue({
+      quotes: [],
+      error: null,
+      isRefreshing: false,
+      lastUpdatedAt: null,
+      refresh,
+    });
+
+    render(<HomePage />);
+
+    fireEvent.click(screen.getByRole('button', { name: '手动刷新' }));
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(mockTrack).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventName: 'watchlist_manual_refresh_clicked',
+        page: 'home',
+      }),
+    );
   });
 
   it('renders intraday trends from local intraday storage', () => {

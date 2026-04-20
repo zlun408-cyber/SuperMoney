@@ -8,6 +8,8 @@ const mockUseWatchlist = vi.fn();
 const mockLoadEstimateAccuracySnapshots = vi.fn();
 const mockLoadEstimateIntradayPoints = vi.fn();
 const mockUseAuthSession = vi.fn();
+const mockTrack = vi.fn();
+const mockTrackOnce = vi.fn();
 
 vi.mock('@/components/fund/add-sip-plan-dialog', () => ({
   AddSipPlanDialog: () => <div data-testid="add-sip-plan-dialog" />,
@@ -37,6 +39,13 @@ vi.mock('@/lib/hooks/use-watchlist', () => ({
   useWatchlist: (...args: unknown[]) => mockUseWatchlist(...args),
 }));
 
+vi.mock('@/lib/hooks/use-intraday-analytics', () => ({
+  useIntradayAnalytics: () => ({
+    track: mockTrack,
+    trackOnce: mockTrackOnce,
+  }),
+}));
+
 vi.mock('@/lib/storage/estimate-accuracy-storage', () => ({
   ESTIMATE_ACCURACY_STORAGE_KEY: 'super-finance-estimate-accuracy',
   ESTIMATE_ACCURACY_UPDATED_EVENT: 'super-finance-estimate-accuracy-updated',
@@ -62,6 +71,8 @@ const noop = vi.fn();
 
 describe('FundDetailContent estimate confidence integration', () => {
   beforeEach(() => {
+    mockTrack.mockReset();
+    mockTrackOnce.mockReset();
     mockUseAuthSession.mockReturnValue({
       userId: null,
       cloudClient: null,
@@ -294,6 +305,84 @@ describe('FundDetailContent estimate confidence integration', () => {
       expect(screen.getByText('置信度低')).toBeTruthy();
       expect(screen.getByText('2/240')).toBeTruthy();
     });
+  });
+
+  it('tracks detail view, intraday chart exposure, and intraday state exposure', async () => {
+    mockUseFundQuotes.mockReturnValue({
+      quotes: [
+        {
+          code: '000001',
+          name: '测试基金',
+          estimatedNav: 1.23,
+          changeRate: 0.8,
+          updatedAt: '2026-04-17 10:31',
+        },
+      ],
+    });
+    mockLoadEstimateIntradayPoints.mockReturnValue({
+      '000001': [
+        {
+          fundCode: '000001',
+          fundName: '测试基金',
+          tradingDate: '2026-04-17',
+          minuteKey: '2026-04-17 10:30',
+          estimatedNav: 1,
+          changeRate: 0,
+          updatedAt: '2026-04-17 10:30',
+          capturedAt: '2026-04-17T02:30:00.000Z',
+        },
+        {
+          fundCode: '000001',
+          fundName: '测试基金',
+          tradingDate: '2026-04-17',
+          minuteKey: '2026-04-17 10:31',
+          estimatedNav: 1.01,
+          changeRate: 0.8,
+          updatedAt: '2026-04-17 10:31',
+          capturedAt: '2026-04-17T02:31:00.000Z',
+        },
+      ],
+    });
+
+    render(<FundDetailContent code="000001" />);
+
+    await waitFor(() => {
+      expect(mockTrackOnce).toHaveBeenCalledWith(
+        'fund-detail-viewed:000001',
+        expect.objectContaining({
+          eventName: 'fund_detail_viewed',
+          page: 'fund_detail',
+          fundCode: '000001',
+          tradingDate: '2026-04-17',
+        }),
+      );
+    });
+
+    expect(mockTrackOnce).toHaveBeenCalledWith(
+      'fund-intraday-chart-viewed:000001',
+      expect.objectContaining({
+        eventName: 'fund_intraday_chart_viewed',
+        page: 'fund_detail',
+        fundCode: '000001',
+        tradingDate: '2026-04-17',
+        intradayStatus: 'generating',
+        confidenceLevel: 'low',
+        coverageRatio: 0.0083,
+      }),
+    );
+
+    expect(mockTrackOnce).toHaveBeenCalledWith(
+      'fund-intraday-state:000001:generating:2026-04-17',
+      expect.objectContaining({
+        eventName: 'fund_intraday_state_seen',
+        page: 'fund_detail',
+        fundCode: '000001',
+        tradingDate: '2026-04-17',
+        intradayStatus: 'generating',
+        confidenceLevel: 'low',
+        coverageRatio: 0.0083,
+      }),
+    );
   });
 
   it.each([

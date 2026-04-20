@@ -11,6 +11,7 @@ import { EditPositionDialog } from '@/components/watchlist/edit-position-dialog'
 import { WatchlistTable } from '@/components/watchlist/watchlist-table';
 import { gradeEstimateConfidence, summarizeEstimateAccuracy } from '@/lib/funds/estimate-accuracy';
 import { buildIntradayTrustSignal, resolveIntradaySignalTradingDate } from '@/lib/funds/intraday-status';
+import { useIntradayAnalytics } from '@/lib/hooks/use-intraday-analytics';
 import { useFundQuotes } from '@/lib/hooks/use-fund-quotes';
 import { useWatchlist } from '@/lib/hooks/use-watchlist';
 import {
@@ -23,6 +24,7 @@ import type { WatchlistFund } from '@/lib/storage/watchlist-storage';
 
 export default function HomePage() {
   const { userId, isAuthenticated, cloudClient, accuracyStore } = useAuthSession();
+  const { track } = useIntradayAnalytics();
   const [editingFund, setEditingFund] = useState<WatchlistFund | null>(null);
   const [intradayPointsByCode, setIntradayPointsByCode] = useState<EstimateIntradayPointMap>(() =>
     loadEstimateIntradayPoints(),
@@ -124,7 +126,16 @@ export default function HomePage() {
         </div>
         <div className="flex gap-3">
           <AddFundDialog onAddFund={addFund} existingCodes={watchlist.map((fund) => fund.code)} />
-          <button className="rounded-xl border border-slate-300 bg-white px-4 py-2" onClick={() => void refresh()}>
+          <button
+            className="rounded-xl border border-slate-300 bg-white px-4 py-2"
+            onClick={() => {
+              track({
+                eventName: 'watchlist_manual_refresh_clicked',
+                page: 'home',
+              });
+              void refresh();
+            }}
+          >
             手动刷新
           </button>
         </div>

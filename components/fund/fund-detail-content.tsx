@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { AddSipPlanDialog } from '@/components/fund/add-sip-plan-dialog';
 import { AddTransactionDialog } from '@/components/fund/add-transaction-dialog';
@@ -11,6 +11,7 @@ import { useAuthSession } from '@/lib/auth/auth-context';
 import { gradeEstimateConfidence, summarizeEstimateAccuracy } from '@/lib/funds/estimate-accuracy';
 import { buildIntradayTrustSignal, resolveIntradaySignalTradingDate } from '@/lib/funds/intraday-status';
 import { calculateTransactionLedgerSummary } from '@/lib/funds/transactions';
+import { useIntradayAnalytics } from '@/lib/hooks/use-intraday-analytics';
 import { useFundQuotes } from '@/lib/hooks/use-fund-quotes';
 import type {
   EstimateAccuracySummary,
@@ -37,13 +38,14 @@ interface FundDetailContentProps {
 
 export function FundDetailContent({ code }: FundDetailContentProps) {
   const { userId, cloudClient, accuracyStore } = useAuthSession();
+  const { trackOnce } = useIntradayAnalytics();
   const { quotes } = useFundQuotes([code], undefined, undefined, { accuracyStore });
   const quote = quotes.find((item) => item.code === code);
   const [estimateAccuracySummary, setEstimateAccuracySummary] =
     useState<EstimateAccuracySummary | null>(null);
   const [estimateConfidenceLevel, setEstimateConfidenceLevel] =
     useState<EstimateConfidenceLevel>('unknown');
-  const [intradayPoints, setIntradayPoints] = useState<EstimateIntradayPoint[]>([]);
+  const [intradayPoints, setIntradayPoints] = useState<EstimateIntradayPoint[]>(() => loadEstimateIntradayPoints()[code] ?? []);
   const [intradayTrustSignal, setIntradayTrustSignal] = useState<EstimateIntradayTrustSignal | null>(null);
   const { watchlist, isReady, addTransaction, updateTransaction, removeTransaction, addSipPlan } = useWatchlist({
     userId,
@@ -53,6 +55,14 @@ export function FundDetailContent({ code }: FundDetailContentProps) {
   });
   const [editingTransaction, setEditingTransaction] = useState<FundTransaction | null>(null);
   const fund = watchlist.find((item) => item.code === code);
+  const currentTradingDate = useMemo(
+    () =>
+      resolveIntradaySignalTradingDate({
+        quoteUpdatedAt: quote?.updatedAt ?? null,
+        points: intradayPoints,
+      }),
+    [intradayPoints, quote?.updatedAt],
+  );
 
   const refreshEstimateAccuracy = useCallback(() => {
     const snapshots = accuracyStore.loadSnapshots().filter((snapshot) => snapshot.fundCode === code);
@@ -82,11 +92,6 @@ export function FundDetailContent({ code }: FundDetailContentProps) {
   }, [code]);
 
   useEffect(() => {
-    const currentTradingDate = resolveIntradaySignalTradingDate({
-      quoteUpdatedAt: quote?.updatedAt ?? null,
-      points: intradayPoints,
-    });
-
     setIntradayTrustSignal(
       buildIntradayTrustSignal({
         points: intradayPoints,
@@ -95,7 +100,50 @@ export function FundDetailContent({ code }: FundDetailContentProps) {
         historicalConfidenceLevel: estimateConfidenceLevel,
       }),
     );
-  }, [estimateConfidenceLevel, intradayPoints, quote?.updatedAt]);
+  }, [currentTradingDate, estimateConfidenceLevel, intradayPoints, quote?.updatedAt]);
+
+  useEffect(() => {
+    if (!isReady || !fund) {
+      return;
+    }
+
+    trackOnce(`fund-detail-viewed:${code}`, {
+      eventName: 'fund_detail_viewed',
+      page: 'fund_detail',
+      fundCode: code,
+      tradingDate: currentTradingDate,
+      intradayStatus: intradayTrustSignal?.status ?? null,
+      confidenceLevel: intradayTrustSignal?.confidenceLevel ?? null,
+      coverageRatio: intradayTrustSignal?.coverageRatio ?? null,
+    });
+
+  }, [code, currentTradingDate, fund, intradayTrustSignal, isReady, trackOnce]);
+
+  useEffect(() => {
+    if (!isReady || !fund || !intradayTrustSignal) {
+      return;
+    }
+
+    trackOnce(`fund-intraday-chart-viewed:${code}`, {
+      eventName: 'fund_intraday_chart_viewed',
+      page: 'fund_detail',
+      fundCode: code,
+      tradingDate: currentTradingDate,
+      intradayStatus: intradayTrustSignal.status,
+      confidenceLevel: intradayTrustSignal.confidenceLevel,
+      coverageRatio: intradayTrustSignal.coverageRatio,
+    });
+
+    trackOnce(`fund-intraday-state:${code}:${intradayTrustSignal.status}:${currentTradingDate}`, {
+      eventName: 'fund_intraday_state_seen',
+      page: 'fund_detail',
+      fundCode: code,
+      tradingDate: currentTradingDate,
+      intradayStatus: intradayTrustSignal.status,
+      confidenceLevel: intradayTrustSignal.confidenceLevel,
+      coverageRatio: intradayTrustSignal.coverageRatio,
+    });
+  }, [code, currentTradingDate, fund, intradayTrustSignal, isReady, trackOnce]);
 
   useEffect(() => {
     refreshEstimateAccuracy();
