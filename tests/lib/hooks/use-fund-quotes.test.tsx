@@ -147,11 +147,13 @@ function createDeferred<T>() {
 describe('useFundQuotes', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network disabled in tests')));
   });
 
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('loads quotes on first render', async () => {

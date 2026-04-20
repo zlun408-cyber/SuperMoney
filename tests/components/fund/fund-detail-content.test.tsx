@@ -249,6 +249,17 @@ describe('FundDetailContent estimate confidence integration', () => {
   });
 
   it('renders the detail intraday chart from local intraday storage', async () => {
+    mockUseFundQuotes.mockReturnValue({
+      quotes: [
+        {
+          code: '000001',
+          name: '测试基金',
+          estimatedNav: 1.23,
+          changeRate: 0.8,
+          updatedAt: '2026-04-17 10:31',
+        },
+      ],
+    });
     mockLoadEstimateIntradayPoints.mockReturnValue({
       '000001': [
         {
@@ -279,6 +290,9 @@ describe('FundDetailContent estimate confidence integration', () => {
     await waitFor(() => {
       expect(screen.getByText('今日走势')).toBeTruthy();
       expect(screen.getByTestId('fund-intraday-chart')).toBeTruthy();
+      expect(screen.getByText('分时生成中')).toBeTruthy();
+      expect(screen.getByText('置信度低')).toBeTruthy();
+      expect(screen.getByText('2/240')).toBeTruthy();
     });
   });
 

@@ -9,6 +9,8 @@ import { StatusBanner } from '@/components/shared/status-banner';
 import { AddFundDialog } from '@/components/watchlist/add-fund-dialog';
 import { EditPositionDialog } from '@/components/watchlist/edit-position-dialog';
 import { WatchlistTable } from '@/components/watchlist/watchlist-table';
+import { gradeEstimateConfidence, summarizeEstimateAccuracy } from '@/lib/funds/estimate-accuracy';
+import { buildIntradayTrustSignal, resolveIntradaySignalTradingDate } from '@/lib/funds/intraday-status';
 import { useFundQuotes } from '@/lib/hooks/use-fund-quotes';
 import { useWatchlist } from '@/lib/hooks/use-watchlist';
 import {
@@ -44,6 +46,46 @@ export default function HomePage() {
   const quotesByCode = useMemo(
     () => Object.fromEntries(quotes.map((quote) => [quote.code, quote])),
     [quotes],
+  );
+  const estimateConfidenceByCode = useMemo(() => {
+    const snapshots =
+      typeof accuracyStore.loadSnapshots === 'function' ? accuracyStore.loadSnapshots() : [];
+
+    return Object.fromEntries(
+      watchlist.map((fund) => {
+        const fundSnapshots = snapshots.filter((snapshot) => snapshot.fundCode === fund.code);
+
+        if (fundSnapshots.length === 0) {
+          return [fund.code, 'unknown'] as const;
+        }
+
+        return [fund.code, gradeEstimateConfidence(summarizeEstimateAccuracy(fundSnapshots))] as const;
+      }),
+    );
+  }, [accuracyStore, watchlist]);
+  const intradayTrustSignalsByCode = useMemo(
+    () =>
+      Object.fromEntries(
+        watchlist.map((fund) => {
+          const quote = quotesByCode[fund.code];
+          const points = intradayPointsByCode[fund.code] ?? [];
+          const currentTradingDate = resolveIntradaySignalTradingDate({
+            quoteUpdatedAt: quote?.updatedAt ?? null,
+            points,
+          });
+
+          return [
+            fund.code,
+            buildIntradayTrustSignal({
+              points,
+              quoteUpdatedAt: quote?.updatedAt ?? null,
+              currentTradingDate,
+              historicalConfidenceLevel: estimateConfidenceByCode[fund.code],
+            }),
+          ] as const;
+        }),
+      ),
+    [estimateConfidenceByCode, intradayPointsByCode, quotesByCode, watchlist],
   );
 
   useEffect(() => {
@@ -116,6 +158,7 @@ export default function HomePage() {
         disablePositionEditing={isAuthenticated}
         funds={watchlist}
         intradayPointsByCode={intradayPointsByCode}
+        intradayTrustSignalsByCode={intradayTrustSignalsByCode}
         quotesByCode={quotesByCode}
         onEditPosition={setEditingFund}
         onRemoveFund={removeFund}

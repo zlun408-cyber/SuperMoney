@@ -47,10 +47,26 @@ describe('FundIntradayChart', () => {
             updatedAt: '2026-04-17 10:32',
           }),
         ]}
+        trustSignal={{
+          status: 'ready',
+          statusLabel: '10:32 更新',
+          statusTone: 'info',
+          lastUpdatedAt: '2026-04-17 10:32',
+          lastUpdatedLabel: '10:32 更新',
+          coverageRatio: 0.01,
+          coverageText: '3/240',
+          pointCount: 3,
+          expectedPointCount: 240,
+          confidenceLevel: 'medium',
+          confidenceText: '置信度中',
+        }}
       />,
     );
 
     expect(screen.getByTestId('fund-intraday-chart')).toBeTruthy();
+    expect(screen.getByText('10:32 更新')).toBeTruthy();
+    expect(screen.getByText('置信度中')).toBeTruthy();
+    expect(screen.getByText('3/240')).toBeTruthy();
     expect(screen.getByText('当前估值')).toBeTruthy();
     expect(screen.getByText('1.0100')).toBeTruthy();
     expect(screen.getByText('今日最高')).toBeTruthy();

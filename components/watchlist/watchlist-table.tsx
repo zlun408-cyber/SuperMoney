@@ -1,19 +1,21 @@
 import React from 'react';
 import Link from 'next/link';
 
+import { IntradayStatusBadge } from '@/components/fund/intraday-status-badge';
 import { FundIntradaySparkline } from '@/components/watchlist/fund-intraday-sparkline';
 import { FundTrendBadge } from '@/components/watchlist/fund-trend-badge';
 import { calculatePositionSummary } from '@/lib/calculations/profit-loss';
 import { buildIntradaySummary } from '@/lib/funds/estimate-intraday';
 import { canPreviewAdjustedEstimate } from '@/lib/funds/estimate-adjustment-preview';
 import { calculateTransactionLedgerSummary } from '@/lib/funds/transactions';
-import type { EstimateIntradayPoint, FundQuote } from '@/lib/funds/types';
+import type { EstimateIntradayPoint, EstimateIntradayTrustSignal, FundQuote } from '@/lib/funds/types';
 import type { WatchlistFund } from '@/lib/storage/watchlist-storage';
 
 interface WatchlistTableProps {
   funds: WatchlistFund[];
   quotesByCode: Record<string, FundQuote>;
   intradayPointsByCode?: Record<string, EstimateIntradayPoint[]>;
+  intradayTrustSignalsByCode?: Record<string, EstimateIntradayTrustSignal>;
   onEditPosition: (fund: WatchlistFund) => void;
   onRemoveFund: (code: string) => void;
   disablePositionEditing?: boolean;
@@ -40,6 +42,7 @@ export function WatchlistTable({
   funds,
   quotesByCode,
   intradayPointsByCode = {},
+  intradayTrustSignalsByCode = {},
   onEditPosition,
   onRemoveFund,
   disablePositionEditing = false,
@@ -71,6 +74,7 @@ export function WatchlistTable({
           {funds.map((fund) => {
             const quote = quotesByCode[fund.code];
             const intradayPoints = intradayPointsByCode[fund.code] ?? [];
+            const intradayTrustSignal = intradayTrustSignalsByCode[fund.code];
             const intradaySummary = buildIntradaySummary(intradayPoints);
             const hasAdjustmentPreview = canPreviewAdjustedEstimate(quote);
             const ledgerSummary = fund.transactions?.length
@@ -122,7 +126,29 @@ export function WatchlistTable({
                 </td>
                 <td className="px-4 py-3 text-slate-900">{formatPercent(quote?.changeRate)}</td>
                 <td className="px-4 py-3 text-slate-600">
-                  <FundIntradaySparkline points={intradayPoints} />
+                  <div className="space-y-2">
+                    <FundIntradaySparkline points={intradayPoints} />
+                    {intradayTrustSignal ? (
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <IntradayStatusBadge
+                          label={intradayTrustSignal.statusLabel}
+                          tone={intradayTrustSignal.statusTone}
+                        />
+                        <IntradayStatusBadge
+                          label={intradayTrustSignal.confidenceText}
+                          tone={
+                            intradayTrustSignal.confidenceLevel === 'high'
+                              ? 'info'
+                              : intradayTrustSignal.confidenceLevel === 'medium' ||
+                                  intradayTrustSignal.confidenceLevel === 'low'
+                                ? 'warning'
+                                : 'muted'
+                          }
+                        />
+                        <span className="text-slate-400">{intradayTrustSignal.coverageText}</span>
+                      </div>
+                    ) : null}
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-slate-600">{holdingText}</td>
                 <td className="px-4 py-3 text-slate-900">{profitText}</td>

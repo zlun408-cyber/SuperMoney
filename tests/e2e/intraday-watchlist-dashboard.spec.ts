@@ -70,12 +70,18 @@ test('renders embedded intraday trend in watchlist and expanded chart on detail 
   const row = page.getByRole('row').filter({ hasText: '测试基金' });
   await expect(row).toContainText('上行');
   await expect(row.getByTestId('fund-intraday-sparkline')).toBeVisible();
+  await expect(row).toContainText('分时生成中');
+  await expect(row).toContainText('置信度低');
+  await expect(row).toContainText('2/240');
 
   await page.goto('/fund/000001');
   await page.waitForLoadState('networkidle');
 
   await expect(page.getByText('今日走势')).toBeVisible();
   await expect(page.getByTestId('fund-intraday-chart')).toBeVisible();
+  await expect(page.getByText('分时生成中')).toBeVisible();
+  await expect(page.getByText('置信度低')).toBeVisible();
+  await expect(page.getByText('2/240')).toBeVisible();
 
   await page.reload();
 

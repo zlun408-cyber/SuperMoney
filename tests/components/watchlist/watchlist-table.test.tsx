@@ -162,6 +162,21 @@ describe('WatchlistTable adjustment preview status', () => {
             intradayPoint({ minuteKey: '2026-04-17 10:31', estimatedNav: 1.01 }),
           ],
         }}
+        intradayTrustSignalsByCode={{
+          '000001': {
+            status: 'ready',
+            statusLabel: '10:31 更新',
+            statusTone: 'info',
+            lastUpdatedAt: '2026-04-17 10:31',
+            lastUpdatedLabel: '10:31 更新',
+            coverageRatio: 0.02,
+            coverageText: '2/240',
+            pointCount: 2,
+            expectedPointCount: 240,
+            confidenceLevel: 'medium',
+            confidenceText: '置信度中',
+          },
+        }}
         onEditPosition={vi.fn()}
         onRemoveFund={vi.fn()}
       />,
@@ -171,5 +186,8 @@ describe('WatchlistTable adjustment preview status', () => {
     expect(within(row).getByText('上行')).toBeTruthy();
     expect(within(row).getByText('今日 +1.00%')).toBeTruthy();
     expect(within(row).getByTestId('fund-intraday-sparkline')).toBeTruthy();
+    expect(within(row).getByText('10:31 更新')).toBeTruthy();
+    expect(within(row).getByText('置信度中')).toBeTruthy();
+    expect(within(row).getByText('2/240')).toBeTruthy();
   });
 });

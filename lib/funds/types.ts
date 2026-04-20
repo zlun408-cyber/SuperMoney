@@ -218,6 +218,36 @@ export interface EstimateIntradaySummary {
   trend: EstimateIntradayTrend;
 }
 
+export type EstimateIntradayDataStatus =
+  | 'ready'
+  | 'generating'
+  | 'stale'
+  | 'empty'
+  | 'unsupported';
+
+export type EstimateIntradaySignalTone = 'info' | 'warning' | 'muted';
+
+export interface EstimateIntradayTrustSignalInput {
+  points: EstimateIntradayPoint[];
+  quoteUpdatedAt: string | null;
+  currentTradingDate: string;
+  historicalConfidenceLevel?: EstimateConfidenceLevel;
+}
+
+export interface EstimateIntradayTrustSignal {
+  status: EstimateIntradayDataStatus;
+  statusLabel: string;
+  statusTone: EstimateIntradaySignalTone;
+  lastUpdatedAt: string | null;
+  lastUpdatedLabel: string;
+  coverageRatio: number;
+  coverageText: string;
+  pointCount: number;
+  expectedPointCount: number;
+  confidenceLevel: EstimateConfidenceLevel;
+  confidenceText: string;
+}
+
 export type EstimateAdjustmentDecisionStatus =
   | 'verification'
   | 'watch'

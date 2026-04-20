@@ -14,6 +14,7 @@ import type {
   EstimateAccuracySummary,
   EstimateConfidenceLevel,
   EstimateIntradayPoint,
+  EstimateIntradayTrustSignal,
   EstimateAdjustmentDecisionStatus,
   EstimateAdjustmentPolicy,
   FundQuote,
@@ -26,6 +27,7 @@ interface FundDetailCardProps {
   estimateAccuracySummary?: EstimateAccuracySummary;
   estimateConfidenceLevel?: EstimateConfidenceLevel;
   intradayPoints?: EstimateIntradayPoint[];
+  intradayTrustSignal?: EstimateIntradayTrustSignal;
 }
 
 function formatNumber(value: number | null | undefined) {
@@ -269,6 +271,7 @@ export function FundDetailCard({
   estimateAccuracySummary,
   estimateConfidenceLevel = 'unknown',
   intradayPoints = [],
+  intradayTrustSignal,
 }: FundDetailCardProps) {
   const [isAdjustedPreviewEnabled, setIsAdjustedPreviewEnabled] = useState(false);
   const canAdjustedEstimatePreview = canPreviewAdjustedEstimate(quote);
@@ -364,7 +367,7 @@ export function FundDetailCard({
         </div>
       ) : null}
 
-      <FundIntradayChart points={intradayPoints} />
+      <FundIntradayChart points={intradayPoints} trustSignal={intradayTrustSignal} />
 
       {estimateAccuracySummary ? (
         <EstimateConfidencePanel

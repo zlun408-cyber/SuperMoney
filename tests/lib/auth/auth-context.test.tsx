@@ -131,7 +131,9 @@ describe('AuthProvider accuracy store integration', () => {
       userId: 'user-1',
       cloudClient: { kind: 'accuracy-cloud' },
     });
-    expect(authenticatedStore.initialize).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(authenticatedStore.initialize).toHaveBeenCalled();
+    });
   });
 
   it('falls back to the local accuracy store when there is no authenticated session', async () => {
@@ -172,6 +174,8 @@ describe('AuthProvider accuracy store integration', () => {
     });
 
     expect(mockCreateAuthenticatedAccuracyStore).not.toHaveBeenCalled();
-    expect(localStore.initialize).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(localStore.initialize).toHaveBeenCalled();
+    });
   });
 });

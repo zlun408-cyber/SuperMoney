@@ -9,12 +9,14 @@ import { SipPlanList } from '@/components/fund/sip-plan-list';
 import { TransactionList } from '@/components/fund/transaction-list';
 import { useAuthSession } from '@/lib/auth/auth-context';
 import { gradeEstimateConfidence, summarizeEstimateAccuracy } from '@/lib/funds/estimate-accuracy';
+import { buildIntradayTrustSignal, resolveIntradaySignalTradingDate } from '@/lib/funds/intraday-status';
 import { calculateTransactionLedgerSummary } from '@/lib/funds/transactions';
 import { useFundQuotes } from '@/lib/hooks/use-fund-quotes';
 import type {
   EstimateAccuracySummary,
   EstimateConfidenceLevel,
   EstimateIntradayPoint,
+  EstimateIntradayTrustSignal,
   FundTransaction,
 } from '@/lib/funds/types';
 import { useWatchlist } from '@/lib/hooks/use-watchlist';
@@ -42,6 +44,7 @@ export function FundDetailContent({ code }: FundDetailContentProps) {
   const [estimateConfidenceLevel, setEstimateConfidenceLevel] =
     useState<EstimateConfidenceLevel>('unknown');
   const [intradayPoints, setIntradayPoints] = useState<EstimateIntradayPoint[]>([]);
+  const [intradayTrustSignal, setIntradayTrustSignal] = useState<EstimateIntradayTrustSignal | null>(null);
   const { watchlist, isReady, addTransaction, updateTransaction, removeTransaction, addSipPlan } = useWatchlist({
     userId,
     cloudClient,
@@ -77,6 +80,22 @@ export function FundDetailContent({ code }: FundDetailContentProps) {
   const refreshIntradayPoints = useCallback(() => {
     setIntradayPoints(loadEstimateIntradayPoints()[code] ?? []);
   }, [code]);
+
+  useEffect(() => {
+    const currentTradingDate = resolveIntradaySignalTradingDate({
+      quoteUpdatedAt: quote?.updatedAt ?? null,
+      points: intradayPoints,
+    });
+
+    setIntradayTrustSignal(
+      buildIntradayTrustSignal({
+        points: intradayPoints,
+        quoteUpdatedAt: quote?.updatedAt ?? null,
+        currentTradingDate,
+        historicalConfidenceLevel: estimateConfidenceLevel,
+      }),
+    );
+  }, [estimateConfidenceLevel, intradayPoints, quote?.updatedAt]);
 
   useEffect(() => {
     refreshEstimateAccuracy();
@@ -187,6 +206,7 @@ export function FundDetailContent({ code }: FundDetailContentProps) {
         estimateAccuracySummary={estimateAccuracySummary ?? undefined}
         estimateConfidenceLevel={estimateConfidenceLevel}
         intradayPoints={intradayPoints}
+        intradayTrustSignal={intradayTrustSignal ?? undefined}
       />
       <AddSipPlanDialog onAddPlan={(plan) => addSipPlan(code, plan)} />
       <SipPlanList plans={sipPlans} executionRecords={executionRecords} />

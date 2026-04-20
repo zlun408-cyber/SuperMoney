@@ -1,11 +1,12 @@
 import React from 'react';
 
+import { IntradayStatusBadge } from '@/components/fund/intraday-status-badge';
 import {
   buildIntradaySummary,
   buildSvgPath,
   normalizeIntradayChartPoints,
 } from '@/lib/funds/estimate-intraday';
-import type { EstimateIntradayPoint } from '@/lib/funds/types';
+import type { EstimateIntradayPoint, EstimateIntradayTrustSignal } from '@/lib/funds/types';
 
 const trendLabels = {
   unknown: '分时生成中',
@@ -61,7 +62,13 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function FundIntradayChart({ points }: { points: EstimateIntradayPoint[] }) {
+export function FundIntradayChart({
+  points,
+  trustSignal,
+}: {
+  points: EstimateIntradayPoint[];
+  trustSignal?: EstimateIntradayTrustSignal;
+}) {
   const summary = buildIntradaySummary(points);
 
   return (
@@ -69,9 +76,28 @@ export function FundIntradayChart({ points }: { points: EstimateIntradayPoint[] 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm font-medium text-slate-900">今日走势</p>
-          <p className="mt-1 text-sm text-slate-500">最近更新：{summary.latestUpdatedAt ?? '暂无'}</p>
+          <p className="mt-1 text-sm text-slate-500">
+            最近更新：{trustSignal?.lastUpdatedLabel ?? summary.latestUpdatedAt ?? '暂无'}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {trustSignal ? (
+            <>
+              <IntradayStatusBadge label={trustSignal.statusLabel} tone={trustSignal.statusTone} />
+              <IntradayStatusBadge
+                label={trustSignal.confidenceText}
+                tone={
+                  trustSignal.confidenceLevel === 'high'
+                    ? 'info'
+                    : trustSignal.confidenceLevel === 'medium' ||
+                        trustSignal.confidenceLevel === 'low'
+                      ? 'warning'
+                      : 'muted'
+                }
+              />
+              <span className="text-xs text-slate-500">{trustSignal.coverageText}</span>
+            </>
+          ) : null}
           <span className={`rounded-full px-3 py-1 text-xs font-medium ${trendClasses[summary.trend]}`}>
             {trendLabels[summary.trend]}
           </span>

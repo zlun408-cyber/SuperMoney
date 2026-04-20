@@ -198,5 +198,93 @@ describe('HomePage adjustment preview consistency', () => {
 
     expect(screen.getByText('上行')).toBeTruthy();
     expect(screen.getByTestId('fund-intraday-sparkline')).toBeTruthy();
+    expect(screen.getByText('分时生成中')).toBeTruthy();
+    expect(screen.getByText('置信度低')).toBeTruthy();
+    expect(screen.getByText('2/240')).toBeTruthy();
+  });
+
+  it('upgrades homepage confidence when historical accuracy samples are available', () => {
+    mockUseAuthSession.mockReturnValue({
+      userId: null,
+      isAuthenticated: false,
+      cloudClient: null,
+      accuracyStore: {
+        loadSnapshots: () => [
+          {
+            id: 's-1',
+            fundCode: '000001',
+            fundName: '测试基金',
+            quoteUpdatedAt: '2026-04-14 10:30',
+            tradingDate: '2026-04-14',
+            estimatedNav: 1.001,
+            finalNav: 1,
+            absoluteErrorRate: 0.001,
+            resolvedAt: '2026-04-14T15:30:00.000Z',
+            createdAt: '2026-04-14T10:30:00.000Z',
+            updatedAt: '2026-04-14T15:30:00.000Z',
+          },
+          {
+            id: 's-2',
+            fundCode: '000001',
+            fundName: '测试基金',
+            quoteUpdatedAt: '2026-04-15 10:30',
+            tradingDate: '2026-04-15',
+            estimatedNav: 1.002,
+            finalNav: 1,
+            absoluteErrorRate: 0.002,
+            resolvedAt: '2026-04-15T15:30:00.000Z',
+            createdAt: '2026-04-15T10:30:00.000Z',
+            updatedAt: '2026-04-15T15:30:00.000Z',
+          },
+          {
+            id: 's-3',
+            fundCode: '000001',
+            fundName: '测试基金',
+            quoteUpdatedAt: '2026-04-16 10:30',
+            tradingDate: '2026-04-16',
+            estimatedNav: 1.003,
+            finalNav: 1,
+            absoluteErrorRate: 0.003,
+            resolvedAt: '2026-04-16T15:30:00.000Z',
+            createdAt: '2026-04-16T10:30:00.000Z',
+            updatedAt: '2026-04-16T15:30:00.000Z',
+          },
+        ],
+      },
+    });
+    mockUseFundQuotes.mockReturnValue({
+      quotes: [
+        {
+          code: '000001',
+          name: '测试基金',
+          estimatedNav: 1.05,
+          changeRate: 0.88,
+          updatedAt: '2026-04-17 10:42',
+        },
+      ],
+      error: null,
+      isRefreshing: false,
+      lastUpdatedAt: '2026-04-17 10:42',
+      refresh: vi.fn(),
+    });
+    mockLoadEstimateIntradayPoints.mockReturnValue({
+      '000001': Array.from({ length: 12 }, (_, index) => ({
+        fundCode: '000001',
+        fundName: '测试基金',
+        tradingDate: '2026-04-17',
+        minuteKey: `2026-04-17 10:${String(30 + index).padStart(2, '0')}`,
+        estimatedNav: 1 + index * 0.001,
+        changeRate: 0.1 * index,
+        updatedAt: `2026-04-17 10:${String(30 + index).padStart(2, '0')}`,
+        capturedAt: `2026-04-17T02:${String(30 + index).padStart(2, '0')}:00.000Z`,
+      })),
+    });
+
+    render(<HomePage />);
+
+    const row = screen.getByRole('row', { name: /测试基金/ });
+    expect(within(row).getByText('10:41 更新')).toBeTruthy();
+    expect(within(row).getByText('置信度中')).toBeTruthy();
+    expect(within(row).getByText('12/240')).toBeTruthy();
   });
 });

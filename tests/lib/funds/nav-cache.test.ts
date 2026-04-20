@@ -12,6 +12,7 @@ describe('nav-cache', () => {
   beforeEach(() => {
     clearL1Cache();
     Object.keys(store).forEach((k) => delete store[k]);
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network disabled in tests')));
     
     const mockLocalStorage = {
       getItem: (key: string) => store[key] || null,
