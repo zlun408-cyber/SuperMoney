@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+import { IntradayAnalyticsDebugPanel } from '@/components/accuracy/intraday-analytics-debug-panel';
 import {
   downloadAccuracyCsvExportZip,
   downloadAccuracyJsonExport,
@@ -1120,6 +1121,8 @@ export function AccuracyDashboard() {
           </p>
         </article>
       </section>
+
+      <IntradayAnalyticsDebugPanel />
 
       <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-5 py-4">

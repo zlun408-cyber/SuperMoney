@@ -64,7 +64,7 @@ describe('AccuracyDashboard', () => {
 
     expect(screen.getAllByText('正在读取本地准确度样本…')).toHaveLength(2);
     expect(screen.getAllByText('正在读取诊断数据…')).toHaveLength(8);
-    expect(screen.getAllByText('读取中')).toHaveLength(4);
+    expect(screen.getAllByText('读取中')).toHaveLength(8);
     expect(screen.queryByText('暂无估值准确度样本')).toBeNull();
   });
 
