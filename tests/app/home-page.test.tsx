@@ -6,6 +6,7 @@ import HomePage from '@/app/page';
 const mockUseAuthSession = vi.fn();
 const mockUseWatchlist = vi.fn();
 const mockUseFundQuotes = vi.fn();
+const mockLoadEstimateIntradayPoints = vi.fn();
 
 vi.mock('next/link', () => ({
   default: ({ children, href, ...props }: { children: React.ReactNode; href: string }) => (
@@ -25,6 +26,12 @@ vi.mock('@/lib/hooks/use-watchlist', () => ({
 
 vi.mock('@/lib/hooks/use-fund-quotes', () => ({
   useFundQuotes: (...args: unknown[]) => mockUseFundQuotes(...args),
+}));
+
+vi.mock('@/lib/storage/estimate-intraday-storage', () => ({
+  ESTIMATE_INTRADAY_STORAGE_KEY: 'super-finance-estimate-intraday',
+  ESTIMATE_INTRADAY_UPDATED_EVENT: 'super-finance-estimate-intraday-updated',
+  loadEstimateIntradayPoints: () => mockLoadEstimateIntradayPoints(),
 }));
 
 vi.mock('@/components/auth/sync-conflict-dialog', () => ({
@@ -70,6 +77,7 @@ describe('HomePage adjustment preview consistency', () => {
       removeFund: vi.fn(),
       updatePosition: vi.fn(),
     });
+    mockLoadEstimateIntradayPoints.mockReturnValue({});
   });
 
   it.each([
@@ -143,5 +151,52 @@ describe('HomePage adjustment preview consistency', () => {
     expect(mockUseFundQuotes).toHaveBeenCalledWith(['000001'], undefined, undefined, {
       accuracyStore,
     });
+  });
+
+  it('renders intraday trends from local intraday storage', () => {
+    mockUseFundQuotes.mockReturnValue({
+      quotes: [
+        {
+          code: '000001',
+          name: '测试基金',
+          estimatedNav: 1.05,
+          changeRate: 0.88,
+          updatedAt: '2026-04-17 10:31',
+        },
+      ],
+      error: null,
+      isRefreshing: false,
+      lastUpdatedAt: '2026-04-17 10:31',
+      refresh: vi.fn(),
+    });
+    mockLoadEstimateIntradayPoints.mockReturnValue({
+      '000001': [
+        {
+          fundCode: '000001',
+          fundName: '测试基金',
+          tradingDate: '2026-04-17',
+          minuteKey: '2026-04-17 10:30',
+          estimatedNav: 1,
+          changeRate: 0,
+          updatedAt: '2026-04-17 10:30',
+          capturedAt: '2026-04-17T02:30:00.000Z',
+        },
+        {
+          fundCode: '000001',
+          fundName: '测试基金',
+          tradingDate: '2026-04-17',
+          minuteKey: '2026-04-17 10:31',
+          estimatedNav: 1.01,
+          changeRate: 0.8,
+          updatedAt: '2026-04-17 10:31',
+          capturedAt: '2026-04-17T02:31:00.000Z',
+        },
+      ],
+    });
+
+    render(<HomePage />);
+
+    expect(screen.getByText('上行')).toBeTruthy();
+    expect(screen.getByTestId('fund-intraday-sparkline')).toBeTruthy();
   });
 });

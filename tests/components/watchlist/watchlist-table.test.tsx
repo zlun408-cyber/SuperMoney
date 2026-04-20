@@ -45,6 +45,18 @@ const baseQuote = {
   },
 };
 
+const intradayPoint = (overrides = {}) => ({
+  fundCode: '000001',
+  fundName: '测试基金',
+  tradingDate: '2026-04-17',
+  minuteKey: '2026-04-17 10:30',
+  estimatedNav: 1,
+  changeRate: 0,
+  updatedAt: '2026-04-17 10:30',
+  capturedAt: '2026-04-17T02:30:00.000Z',
+  ...overrides,
+});
+
 afterEach(() => {
   cleanup();
 });
@@ -135,5 +147,29 @@ describe('WatchlistTable adjustment preview status', () => {
     );
 
     expect(screen.queryByText('修正预览可用')).toBeNull();
+  });
+
+  it('renders intraday trend beside fund name and a sparkline column', () => {
+    render(
+      <WatchlistTable
+        funds={[baseFund]}
+        quotesByCode={{
+          '000001': baseQuote,
+        }}
+        intradayPointsByCode={{
+          '000001': [
+            intradayPoint({ estimatedNav: 1 }),
+            intradayPoint({ minuteKey: '2026-04-17 10:31', estimatedNav: 1.01 }),
+          ],
+        }}
+        onEditPosition={vi.fn()}
+        onRemoveFund={vi.fn()}
+      />,
+    );
+
+    const row = screen.getByRole('row', { name: /测试基金/ });
+    expect(within(row).getByText('上行')).toBeTruthy();
+    expect(within(row).getByText('今日 +1.00%')).toBeTruthy();
+    expect(within(row).getByTestId('fund-intraday-sparkline')).toBeTruthy();
   });
 });

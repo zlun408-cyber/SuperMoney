@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 import { useAuthSession } from '@/lib/auth/auth-context';
 import { SyncConflictDialog } from '@/components/auth/sync-conflict-dialog';
@@ -11,11 +11,20 @@ import { EditPositionDialog } from '@/components/watchlist/edit-position-dialog'
 import { WatchlistTable } from '@/components/watchlist/watchlist-table';
 import { useFundQuotes } from '@/lib/hooks/use-fund-quotes';
 import { useWatchlist } from '@/lib/hooks/use-watchlist';
+import {
+  ESTIMATE_INTRADAY_STORAGE_KEY,
+  ESTIMATE_INTRADAY_UPDATED_EVENT,
+  loadEstimateIntradayPoints,
+  type EstimateIntradayPointMap,
+} from '@/lib/storage/estimate-intraday-storage';
 import type { WatchlistFund } from '@/lib/storage/watchlist-storage';
 
 export default function HomePage() {
   const { userId, isAuthenticated, cloudClient, accuracyStore } = useAuthSession();
   const [editingFund, setEditingFund] = useState<WatchlistFund | null>(null);
+  const [intradayPointsByCode, setIntradayPointsByCode] = useState<EstimateIntradayPointMap>(() =>
+    loadEstimateIntradayPoints(),
+  );
   const [syncConflictActions, setSyncConflictActions] = useState<{
     useCloud: () => void;
     useLocal: () => void;
@@ -36,6 +45,27 @@ export default function HomePage() {
     () => Object.fromEntries(quotes.map((quote) => [quote.code, quote])),
     [quotes],
   );
+
+  useEffect(() => {
+    const refreshIntradayPoints = () => {
+      setIntradayPointsByCode(loadEstimateIntradayPoints());
+    };
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== null && event.key !== ESTIMATE_INTRADAY_STORAGE_KEY) {
+        return;
+      }
+
+      refreshIntradayPoints();
+    };
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener(ESTIMATE_INTRADAY_UPDATED_EVENT, refreshIntradayPoints);
+
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener(ESTIMATE_INTRADAY_UPDATED_EVENT, refreshIntradayPoints);
+    };
+  }, []);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-6 py-10">
@@ -85,6 +115,7 @@ export default function HomePage() {
       <WatchlistTable
         disablePositionEditing={isAuthenticated}
         funds={watchlist}
+        intradayPointsByCode={intradayPointsByCode}
         quotesByCode={quotesByCode}
         onEditPosition={setEditingFund}
         onRemoveFund={removeFund}

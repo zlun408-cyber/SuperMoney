@@ -14,6 +14,7 @@ import { useFundQuotes } from '@/lib/hooks/use-fund-quotes';
 import type {
   EstimateAccuracySummary,
   EstimateConfidenceLevel,
+  EstimateIntradayPoint,
   FundTransaction,
 } from '@/lib/funds/types';
 import { useWatchlist } from '@/lib/hooks/use-watchlist';
@@ -22,6 +23,11 @@ import {
   ESTIMATE_ACCURACY_UPDATED_EVENT,
   loadEstimateAccuracySnapshots,
 } from '@/lib/storage/estimate-accuracy-storage';
+import {
+  ESTIMATE_INTRADAY_STORAGE_KEY,
+  ESTIMATE_INTRADAY_UPDATED_EVENT,
+  loadEstimateIntradayPoints,
+} from '@/lib/storage/estimate-intraday-storage';
 
 interface FundDetailContentProps {
   code: string;
@@ -35,6 +41,7 @@ export function FundDetailContent({ code }: FundDetailContentProps) {
     useState<EstimateAccuracySummary | null>(null);
   const [estimateConfidenceLevel, setEstimateConfidenceLevel] =
     useState<EstimateConfidenceLevel>('unknown');
+  const [intradayPoints, setIntradayPoints] = useState<EstimateIntradayPoint[]>([]);
   const { watchlist, isReady, addTransaction, updateTransaction, removeTransaction, addSipPlan } = useWatchlist({
     userId,
     cloudClient,
@@ -67,6 +74,10 @@ export function FundDetailContent({ code }: FundDetailContentProps) {
     setEstimateConfidenceLevel(gradeEstimateConfidence(summary));
   }, [accuracyStore, code]);
 
+  const refreshIntradayPoints = useCallback(() => {
+    setIntradayPoints(loadEstimateIntradayPoints()[code] ?? []);
+  }, [code]);
+
   useEffect(() => {
     refreshEstimateAccuracy();
 
@@ -89,6 +100,26 @@ export function FundDetailContent({ code }: FundDetailContentProps) {
       window.removeEventListener(ESTIMATE_ACCURACY_UPDATED_EVENT, handleEstimateAccuracyUpdated);
     };
   }, [refreshEstimateAccuracy]);
+
+  useEffect(() => {
+    refreshIntradayPoints();
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== null && event.key !== ESTIMATE_INTRADAY_STORAGE_KEY) {
+        return;
+      }
+
+      refreshIntradayPoints();
+    };
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener(ESTIMATE_INTRADAY_UPDATED_EVENT, refreshIntradayPoints);
+
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener(ESTIMATE_INTRADAY_UPDATED_EVENT, refreshIntradayPoints);
+    };
+  }, [refreshIntradayPoints]);
 
   if (!isReady) {
     return (
@@ -155,6 +186,7 @@ export function FundDetailContent({ code }: FundDetailContentProps) {
         quote={quote}
         estimateAccuracySummary={estimateAccuracySummary ?? undefined}
         estimateConfidenceLevel={estimateConfidenceLevel}
+        intradayPoints={intradayPoints}
       />
       <AddSipPlanDialog onAddPlan={(plan) => addSipPlan(code, plan)} />
       <SipPlanList plans={sipPlans} executionRecords={executionRecords} />

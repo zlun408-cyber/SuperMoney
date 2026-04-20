@@ -1,15 +1,19 @@
 import React from 'react';
 import Link from 'next/link';
 
+import { FundIntradaySparkline } from '@/components/watchlist/fund-intraday-sparkline';
+import { FundTrendBadge } from '@/components/watchlist/fund-trend-badge';
 import { calculatePositionSummary } from '@/lib/calculations/profit-loss';
+import { buildIntradaySummary } from '@/lib/funds/estimate-intraday';
 import { canPreviewAdjustedEstimate } from '@/lib/funds/estimate-adjustment-preview';
 import { calculateTransactionLedgerSummary } from '@/lib/funds/transactions';
-import type { FundQuote } from '@/lib/funds/types';
+import type { EstimateIntradayPoint, FundQuote } from '@/lib/funds/types';
 import type { WatchlistFund } from '@/lib/storage/watchlist-storage';
 
 interface WatchlistTableProps {
   funds: WatchlistFund[];
   quotesByCode: Record<string, FundQuote>;
+  intradayPointsByCode?: Record<string, EstimateIntradayPoint[]>;
   onEditPosition: (fund: WatchlistFund) => void;
   onRemoveFund: (code: string) => void;
   disablePositionEditing?: boolean;
@@ -35,6 +39,7 @@ function formatDifference(value: number | null | undefined) {
 export function WatchlistTable({
   funds,
   quotesByCode,
+  intradayPointsByCode = {},
   onEditPosition,
   onRemoveFund,
   disablePositionEditing = false,
@@ -56,6 +61,7 @@ export function WatchlistTable({
             <th className="px-4 py-3 font-medium">代码</th>
             <th className="px-4 py-3 font-medium">当前估值</th>
             <th className="px-4 py-3 font-medium">涨跌幅</th>
+            <th className="px-4 py-3 font-medium">分钟走势</th>
             <th className="px-4 py-3 font-medium">持仓</th>
             <th className="px-4 py-3 font-medium">估算盈亏</th>
             <th className="px-4 py-3 font-medium">操作</th>
@@ -64,6 +70,8 @@ export function WatchlistTable({
         <tbody className="divide-y divide-slate-100">
           {funds.map((fund) => {
             const quote = quotesByCode[fund.code];
+            const intradayPoints = intradayPointsByCode[fund.code] ?? [];
+            const intradaySummary = buildIntradaySummary(intradayPoints);
             const hasAdjustmentPreview = canPreviewAdjustedEstimate(quote);
             const ledgerSummary = fund.transactions?.length
               ? calculateTransactionLedgerSummary(fund.transactions, quote?.estimatedNav)
@@ -91,6 +99,7 @@ export function WatchlistTable({
                   <Link className="hover:text-emerald-600 hover:underline" href={`/fund/${fund.code}`}>
                     {fund.name}
                   </Link>
+                  <FundTrendBadge summary={intradaySummary} />
                 </td>
                 <td className="px-4 py-3 text-slate-600">{fund.code}</td>
                 <td className="px-4 py-3 text-slate-900">
@@ -112,6 +121,9 @@ export function WatchlistTable({
                   </div>
                 </td>
                 <td className="px-4 py-3 text-slate-900">{formatPercent(quote?.changeRate)}</td>
+                <td className="px-4 py-3 text-slate-600">
+                  <FundIntradaySparkline points={intradayPoints} />
+                </td>
                 <td className="px-4 py-3 text-slate-600">{holdingText}</td>
                 <td className="px-4 py-3 text-slate-900">{profitText}</td>
                 <td className="px-4 py-3">

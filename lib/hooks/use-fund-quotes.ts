@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { AccuracyStore } from '@/lib/accuracy/accuracy-store';
 import { fetchFundQuotes, type FetchFundQuotes } from '@/lib/funds/data-source';
+import { buildEstimateIntradayPoint } from '@/lib/funds/estimate-intraday';
 import {
   applyEstimateAdjustmentPolicyToQuotes,
 } from '@/lib/funds/estimate-adjustment-policy';
@@ -33,6 +34,7 @@ import {
   ESTIMATE_ADJUSTMENT_DECISIONS_UPDATED_EVENT,
   loadEstimateAdjustmentDecisions,
 } from '@/lib/storage/estimate-adjustment-storage';
+import { saveEstimateIntradayQuotePoints } from '@/lib/storage/estimate-intraday-storage';
 
 interface UseFundQuotesAccuracyOptions {
   accuracyStore?: Pick<
@@ -210,6 +212,29 @@ export function useFundQuotes(
         // Accuracy tracking must never alter quote loading behavior.
       }
     };
+    const runIntradaySideEffects = (nextQuotes: FundQuote[]) => {
+      if (!isLatestRequest() || nextQuotes.length === 0) {
+        return;
+      }
+
+      const capturedAt = new Date().toISOString();
+      const points = nextQuotes
+        .map((quote) => buildEstimateIntradayPoint(quote, capturedAt))
+        .filter((point): point is NonNullable<typeof point> => point !== null);
+
+      if (points.length === 0) {
+        return;
+      }
+
+      saveEstimateIntradayQuotePoints(points, points[0].tradingDate);
+    };
+    const runIntradaySideEffectsSafely = (nextQuotes: FundQuote[]) => {
+      try {
+        runIntradaySideEffects(nextQuotes);
+      } catch {
+        // Intraday tracking must never alter quote loading behavior.
+      }
+    };
     const attachValidationFeedbackSafely = (
       nextQuotes: FundQuote[],
       decisions: Record<string, EstimateAdjustmentDecisionItem>,
@@ -312,6 +337,7 @@ export function useFundQuotes(
       }
 
       setIsRefreshing(false);
+      runIntradaySideEffectsSafely(quotesForAccuracy);
       await runAccuracySideEffectsSafely(quotesForAccuracy);
     }
   }, []);

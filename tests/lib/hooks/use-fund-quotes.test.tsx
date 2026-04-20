@@ -6,6 +6,7 @@ import type { AccuracyStore } from '@/lib/accuracy/accuracy-store';
 import type { FundQuote } from '@/lib/funds/types';
 import { ESTIMATE_ADJUSTMENT_DECISIONS_UPDATED_EVENT } from '@/lib/funds/estimate-adjustment-policy';
 import { useFundQuotes } from '@/lib/hooks/use-fund-quotes';
+import * as intradayStorage from '@/lib/storage/estimate-intraday-storage';
 
 const sampleQuotes: FundQuote[] = [
   {
@@ -1161,5 +1162,69 @@ describe('useFundQuotes estimate accuracy side effects', () => {
     });
 
     expect(saveSnapshots).not.toHaveBeenCalled();
+  });
+});
+
+describe('useFundQuotes intraday side effects', () => {
+  it('samples successful quotes into the intraday store', async () => {
+    vi.useRealTimers();
+    vi.spyOn(intradayStorage, 'saveEstimateIntradayQuotePoints').mockImplementation(vi.fn());
+    const fetcher = vi.fn().mockResolvedValue([
+      {
+        code: '000001',
+        name: '基金A',
+        estimatedNav: 1.23,
+        changeRate: 0.8,
+        updatedAt: '2026-04-17 10:31',
+      },
+    ]);
+
+    renderHook(() =>
+      useFundQuotes(['000001'], fetcher, 60_000, {
+        loadSnapshots: () => [],
+        saveSnapshots: vi.fn(),
+        resolveFinalNav: vi.fn().mockResolvedValue(null),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(intradayStorage.saveEstimateIntradayQuotePoints).toHaveBeenCalledWith(
+        [
+          expect.objectContaining({
+            fundCode: '000001',
+            fundName: '基金A',
+            tradingDate: '2026-04-17',
+            minuteKey: '2026-04-17 10:31',
+            estimatedNav: 1.23,
+            changeRate: 0.8,
+          }),
+        ],
+        '2026-04-17',
+      );
+    });
+  });
+
+  it('keeps quote success semantics when intraday storage throws', async () => {
+    vi.spyOn(intradayStorage, 'saveEstimateIntradayQuotePoints').mockImplementation(() => {
+      throw new Error('intraday write failed');
+    });
+    const fetcher = vi.fn().mockResolvedValue([
+      {
+        code: '000001',
+        name: '基金A',
+        estimatedNav: 1.23,
+        changeRate: 0.8,
+        updatedAt: '2026-04-17 10:31',
+      },
+    ]);
+
+    const { result } = renderHook(() => useFundQuotes(['000001'], fetcher, 60_000));
+
+    await waitFor(() => {
+      expect(result.current.quotes).toEqual([
+        expect.objectContaining({ code: '000001', estimatedNav: 1.23 }),
+      ]);
+      expect(result.current.error).toBeNull();
+    });
   });
 });

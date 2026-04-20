@@ -192,6 +192,32 @@ export interface EstimateAccuracySummary {
   latestResolvedAt: string | null;
 }
 
+export interface EstimateIntradayPoint {
+  fundCode: string;
+  fundName: string;
+  tradingDate: string;
+  minuteKey: string;
+  estimatedNav: number;
+  changeRate: number;
+  updatedAt: string;
+  capturedAt: string;
+}
+
+export type EstimateIntradayTrend = 'unknown' | 'up' | 'down' | 'flat' | 'volatile';
+
+export interface EstimateIntradaySummary {
+  pointCount: number;
+  firstEstimatedNav: number | null;
+  latestEstimatedNav: number | null;
+  highEstimatedNav: number | null;
+  lowEstimatedNav: number | null;
+  changeFromFirst: number | null;
+  changeRateFromFirst: number | null;
+  latestChangeRate: number | null;
+  latestUpdatedAt: string | null;
+  trend: EstimateIntradayTrend;
+}
+
 export type EstimateAdjustmentDecisionStatus =
   | 'verification'
   | 'watch'

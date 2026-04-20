@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from 'react';
 
 import { EstimateConfidencePanel } from '@/components/fund/estimate-confidence-panel';
+import { FundIntradayChart } from '@/components/fund/fund-intraday-chart';
 import { calculatePositionSummary } from '@/lib/calculations/profit-loss';
 import {
   canPreviewAdjustedEstimate,
@@ -12,6 +13,7 @@ import { calculateTransactionLedgerSummary } from '@/lib/funds/transactions';
 import type {
   EstimateAccuracySummary,
   EstimateConfidenceLevel,
+  EstimateIntradayPoint,
   EstimateAdjustmentDecisionStatus,
   EstimateAdjustmentPolicy,
   FundQuote,
@@ -23,6 +25,7 @@ interface FundDetailCardProps {
   quote?: FundQuote;
   estimateAccuracySummary?: EstimateAccuracySummary;
   estimateConfidenceLevel?: EstimateConfidenceLevel;
+  intradayPoints?: EstimateIntradayPoint[];
 }
 
 function formatNumber(value: number | null | undefined) {
@@ -265,6 +268,7 @@ export function FundDetailCard({
   quote,
   estimateAccuracySummary,
   estimateConfidenceLevel = 'unknown',
+  intradayPoints = [],
 }: FundDetailCardProps) {
   const [isAdjustedPreviewEnabled, setIsAdjustedPreviewEnabled] = useState(false);
   const canAdjustedEstimatePreview = canPreviewAdjustedEstimate(quote);
@@ -359,6 +363,8 @@ export function FundDetailCard({
           </ul>
         </div>
       ) : null}
+
+      <FundIntradayChart points={intradayPoints} />
 
       {estimateAccuracySummary ? (
         <EstimateConfidencePanel

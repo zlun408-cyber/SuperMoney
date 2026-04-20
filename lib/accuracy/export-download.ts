@@ -21,6 +21,8 @@ interface DownloadAccuracyExportInput
 const buildExportTimestamp = (now: Date = new Date()): string =>
   now.toISOString().replaceAll(':', '').replaceAll('-', '').replace('.000', '');
 
+const toBlobSafeArrayBuffer = (bytes: Uint8Array): ArrayBuffer => Uint8Array.from(bytes).buffer;
+
 const triggerBrowserDownload = (blob: Blob, filename: string): void => {
   const objectUrl = window.URL.createObjectURL(blob);
   const anchor = document.createElement('a');
@@ -59,7 +61,7 @@ export function downloadAccuracyCsvExportZip(input: DownloadAccuracyExportInput)
   const archive = buildZipArchive(files);
 
   triggerBrowserDownload(
-    new Blob([archive], { type: 'application/zip' }),
+    new Blob([toBlobSafeArrayBuffer(archive)], { type: 'application/zip' }),
     `accuracy-export-${buildExportTimestamp()}.zip`,
   );
 }

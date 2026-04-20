@@ -6,6 +6,7 @@ import { FundDetailContent } from '@/components/fund/fund-detail-content';
 const mockUseFundQuotes = vi.fn();
 const mockUseWatchlist = vi.fn();
 const mockLoadEstimateAccuracySnapshots = vi.fn();
+const mockLoadEstimateIntradayPoints = vi.fn();
 const mockUseAuthSession = vi.fn();
 
 vi.mock('@/components/fund/add-sip-plan-dialog', () => ({
@@ -40,6 +41,12 @@ vi.mock('@/lib/storage/estimate-accuracy-storage', () => ({
   ESTIMATE_ACCURACY_STORAGE_KEY: 'super-finance-estimate-accuracy',
   ESTIMATE_ACCURACY_UPDATED_EVENT: 'super-finance-estimate-accuracy-updated',
   loadEstimateAccuracySnapshots: () => mockLoadEstimateAccuracySnapshots(),
+}));
+
+vi.mock('@/lib/storage/estimate-intraday-storage', () => ({
+  ESTIMATE_INTRADAY_STORAGE_KEY: 'super-finance-estimate-intraday',
+  ESTIMATE_INTRADAY_UPDATED_EVENT: 'super-finance-estimate-intraday-updated',
+  loadEstimateIntradayPoints: () => mockLoadEstimateIntradayPoints(),
 }));
 
 const baseFund = {
@@ -82,6 +89,7 @@ describe('FundDetailContent estimate confidence integration', () => {
       addSipPlan: noop,
     });
     mockLoadEstimateAccuracySnapshots.mockReturnValue([]);
+    mockLoadEstimateIntradayPoints.mockReturnValue({});
   });
 
   afterEach(() => {
@@ -237,6 +245,40 @@ describe('FundDetailContent estimate confidence integration', () => {
       expect(screen.getByText('中')).toBeTruthy();
       expect(screen.getByText('3 / 3')).toBeTruthy();
       expect(screen.getByText('0.40%')).toBeTruthy();
+    });
+  });
+
+  it('renders the detail intraday chart from local intraday storage', async () => {
+    mockLoadEstimateIntradayPoints.mockReturnValue({
+      '000001': [
+        {
+          fundCode: '000001',
+          fundName: '测试基金',
+          tradingDate: '2026-04-17',
+          minuteKey: '2026-04-17 10:30',
+          estimatedNav: 1,
+          changeRate: 0,
+          updatedAt: '2026-04-17 10:30',
+          capturedAt: '2026-04-17T02:30:00.000Z',
+        },
+        {
+          fundCode: '000001',
+          fundName: '测试基金',
+          tradingDate: '2026-04-17',
+          minuteKey: '2026-04-17 10:31',
+          estimatedNav: 1.01,
+          changeRate: 0.8,
+          updatedAt: '2026-04-17 10:31',
+          capturedAt: '2026-04-17T02:31:00.000Z',
+        },
+      ],
+    });
+
+    render(<FundDetailContent code="000001" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('今日走势')).toBeTruthy();
+      expect(screen.getByTestId('fund-intraday-chart')).toBeTruthy();
     });
   });
 
