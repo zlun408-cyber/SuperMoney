@@ -80,6 +80,33 @@ export function IntradayAnalyticsDebugPanel() {
       }),
     [summary.intradayStatusCounts],
   );
+  const exportJsonText = useMemo(
+    () =>
+      JSON.stringify(
+        {
+          exportedAt: new Date().toISOString(),
+          summary,
+          events,
+        },
+        null,
+        2,
+      ),
+    [events, summary],
+  );
+
+  const handleExportJson = () => {
+    const blob = new Blob([exportJsonText], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'intraday-analytics-debug.json';
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCopyJson = async () => {
+    await navigator.clipboard.writeText(exportJsonText);
+  };
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -89,14 +116,32 @@ export function IntradayAnalyticsDebugPanel() {
           <h2 className="mt-1 text-xl font-semibold text-slate-900">分时行为调试</h2>
           <p className="mt-1 text-sm text-slate-600">查看本地分时埋点汇总，确认首页 / 详情页行为是否被正确记录。</p>
         </div>
-        <button
-          className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={!hasLoadedEvents || events.length === 0}
-          onClick={clearIntradayAnalyticsEvents}
-          type="button"
-        >
-          清空分时行为记录
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!hasLoadedEvents || events.length === 0}
+            onClick={() => void handleCopyJson()}
+            type="button"
+          >
+            复制分时行为 JSON
+          </button>
+          <button
+            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!hasLoadedEvents || events.length === 0}
+            onClick={handleExportJson}
+            type="button"
+          >
+            导出分时行为 JSON
+          </button>
+          <button
+            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!hasLoadedEvents || events.length === 0}
+            onClick={clearIntradayAnalyticsEvents}
+            type="button"
+          >
+            清空分时行为记录
+          </button>
+        </div>
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">

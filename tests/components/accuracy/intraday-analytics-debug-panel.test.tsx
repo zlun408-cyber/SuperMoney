@@ -5,6 +5,10 @@ import { IntradayAnalyticsDebugPanel } from '@/components/accuracy/intraday-anal
 
 const mockLoadIntradayAnalyticsEvents = vi.fn();
 const mockClearIntradayAnalyticsEvents = vi.fn();
+const mockWriteText = vi.fn();
+const mockCreateObjectURL = vi.fn();
+const mockRevokeObjectURL = vi.fn();
+const mockAnchorClick = vi.fn();
 
 vi.mock('@/lib/storage/intraday-analytics-storage', () => ({
   INTRADAY_ANALYTICS_STORAGE_KEY: 'super-finance-intraday-analytics',
@@ -17,10 +21,31 @@ describe('IntradayAnalyticsDebugPanel', () => {
   beforeEach(() => {
     mockLoadIntradayAnalyticsEvents.mockReturnValue([]);
     mockClearIntradayAnalyticsEvents.mockReset();
+    mockWriteText.mockReset();
+    mockCreateObjectURL.mockReset();
+    mockRevokeObjectURL.mockReset();
+    mockAnchorClick.mockReset();
+
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: mockWriteText,
+      },
+    });
+    Object.defineProperty(globalThis.URL, 'createObjectURL', {
+      configurable: true,
+      value: mockCreateObjectURL.mockReturnValue('blob:intraday-analytics'),
+    });
+    Object.defineProperty(globalThis.URL, 'revokeObjectURL', {
+      configurable: true,
+      value: mockRevokeObjectURL,
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(mockAnchorClick);
   });
 
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
   });
 
   it('loads local analytics events and renders summary, top funds, and recent activity', async () => {
@@ -173,5 +198,67 @@ describe('IntradayAnalyticsDebugPanel', () => {
     await waitFor(() => {
       expect(screen.getByText('暂无分时行为埋点记录')).toBeTruthy();
     });
+  });
+
+  it('exports local intraday analytics as a json file', async () => {
+    mockLoadIntradayAnalyticsEvents.mockReturnValue([
+      {
+        id: 'e-1',
+        eventName: 'watchlist_manual_refresh_clicked',
+        page: 'home',
+        occurredAt: '2026-04-20T10:32:00.000Z',
+        fundCode: null,
+        tradingDate: null,
+        intradayStatus: null,
+        confidenceLevel: null,
+        coverageRatio: null,
+        meta: null,
+      },
+    ]);
+
+    render(<IntradayAnalyticsDebugPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('intraday-analytics-summary-total').textContent).toContain('1');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '导出分时行为 JSON' }));
+
+    expect(mockCreateObjectURL).toHaveBeenCalledTimes(1);
+    expect(mockAnchorClick).toHaveBeenCalledTimes(1);
+    expect(mockRevokeObjectURL).toHaveBeenCalledWith('blob:intraday-analytics');
+  });
+
+  it('copies local intraday analytics json to clipboard', async () => {
+    mockWriteText.mockResolvedValue(undefined);
+    mockLoadIntradayAnalyticsEvents.mockReturnValue([
+      {
+        id: 'e-1',
+        eventName: 'fund_detail_viewed',
+        page: 'fund_detail',
+        occurredAt: '2026-04-20T10:33:00.000Z',
+        fundCode: '000001',
+        tradingDate: '2026-04-20',
+        intradayStatus: 'generating',
+        confidenceLevel: 'low',
+        coverageRatio: 0.02,
+        meta: null,
+      },
+    ]);
+
+    render(<IntradayAnalyticsDebugPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('intraday-analytics-summary-total').textContent).toContain('1');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '复制分时行为 JSON' }));
+
+    await waitFor(() => {
+      expect(mockWriteText).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockWriteText.mock.calls[0]?.[0]).toContain('"eventName": "fund_detail_viewed"');
+    expect(mockWriteText.mock.calls[0]?.[0]).toContain('"totalEvents": 1');
   });
 });
