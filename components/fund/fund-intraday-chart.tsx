@@ -4,7 +4,7 @@ import { IntradayStatusBadge } from '@/components/fund/intraday-status-badge';
 import {
   buildIntradaySummary,
   buildSvgPath,
-  normalizeIntradayChartPoints,
+  sortIntradayPoints,
 } from '@/lib/funds/estimate-intraday';
 import type { EstimateIntradayPoint, EstimateIntradayTrustSignal } from '@/lib/funds/types';
 
@@ -33,6 +33,10 @@ function formatPercent(value: number | null): string {
     return '--';
   }
 
+  return `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
+}
+
+function formatAxisPercent(value: number): string {
   return `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
 }
 
@@ -84,6 +88,70 @@ const marketToneClasses = {
   },
 } as const;
 
+const CHART_WIDTH = 640;
+const CHART_HEIGHT = 190;
+const CHART_PADDING = {
+  top: 18,
+  right: 22,
+  bottom: 42,
+  left: 62,
+} as const;
+
+const plotWidth = CHART_WIDTH - CHART_PADDING.left - CHART_PADDING.right;
+const plotHeight = CHART_HEIGHT - CHART_PADDING.top - CHART_PADDING.bottom;
+
+function getTimeLabel(point: EstimateIntradayPoint): string {
+  const source = point.minuteKey || point.updatedAt;
+  const timeMatch = source.match(/(\d{2}:\d{2})/);
+
+  return timeMatch?.[1] ?? source.slice(-5);
+}
+
+function buildChangeRateChart(points: EstimateIntradayPoint[]) {
+  const sorted = sortIntradayPoints(points);
+  const values = sorted.map((point) => point.changeRate);
+  let minValue = Math.min(0, ...values);
+  let maxValue = Math.max(0, ...values);
+
+  if (minValue === maxValue) {
+    minValue -= 0.1;
+    maxValue += 0.1;
+  }
+
+  const range = maxValue - minValue;
+  const xForIndex = (index: number) =>
+    CHART_PADDING.left + (sorted.length === 1 ? plotWidth / 2 : (index / (sorted.length - 1)) * plotWidth);
+  const yForValue = (value: number) =>
+    CHART_PADDING.top + ((maxValue - value) / range) * plotHeight;
+
+  const chartPoints = sorted.map((point, index) => ({
+    x: Number(xForIndex(index).toFixed(3)),
+    y: Number(yForValue(point.changeRate).toFixed(3)),
+    point,
+  }));
+
+  const middleValue = (maxValue + minValue) / 2;
+  const yTicks = [maxValue, middleValue, minValue].map((value) => ({
+    value,
+    y: Number(yForValue(value).toFixed(3)),
+    label: formatAxisPercent(value),
+  }));
+
+  const xTickIndexes = Array.from(new Set([0, Math.floor((sorted.length - 1) / 2), sorted.length - 1]));
+  const xTicks = xTickIndexes.map((index) => ({
+    x: Number(xForIndex(index).toFixed(3)),
+    label: getTimeLabel(sorted[index]),
+  }));
+
+  return {
+    chartPoints,
+    path: buildSvgPath(chartPoints),
+    xTicks,
+    yTicks,
+    zeroY: Number(yForValue(0).toFixed(3)),
+  };
+}
+
 function Metric({ label, value, colorClass }: { label: string; value: string; colorClass?: string }) {
   return (
     <div className="rounded-lg bg-slate-50 p-3">
@@ -104,6 +172,7 @@ export function FundIntradayChart({
   const chartTone = getMarketTone(summary.latestChangeRate);
   const changeFromFirstTone = getMarketTone(summary.changeRateFromFirst);
   const latestChangeTone = getMarketTone(summary.latestChangeRate);
+  const changeRateChart = summary.pointCount >= 2 ? buildChangeRateChart(points) : null;
 
   return (
     <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
@@ -147,19 +216,110 @@ export function FundIntradayChart({
         </div>
       ) : (
         <svg
-          aria-label="今日分钟走势"
-          className="mt-4 h-40 w-full overflow-visible"
+          aria-label="今日分钟涨跌幅走势"
+          className="mt-4 h-56 w-full overflow-visible"
           data-testid="fund-intraday-chart"
           role="img"
-          viewBox="0 0 640 160"
+          viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
         >
+          <line
+            x1={CHART_PADDING.left}
+            x2={CHART_PADDING.left}
+            y1={CHART_PADDING.top}
+            y2={CHART_HEIGHT - CHART_PADDING.bottom}
+            className="stroke-slate-300"
+            strokeWidth="1"
+          />
+          <line
+            x1={CHART_PADDING.left}
+            x2={CHART_WIDTH - CHART_PADDING.right}
+            y1={CHART_HEIGHT - CHART_PADDING.bottom}
+            y2={CHART_HEIGHT - CHART_PADDING.bottom}
+            className="stroke-slate-300"
+            strokeWidth="1"
+          />
+          {changeRateChart?.yTicks.map((tick) => (
+            <g key={`${tick.label}-${tick.y}`}>
+              <line
+                x1={CHART_PADDING.left}
+                x2={CHART_WIDTH - CHART_PADDING.right}
+                y1={tick.y}
+                y2={tick.y}
+                className="stroke-slate-100"
+                strokeWidth="1"
+              />
+              <text
+                x={CHART_PADDING.left - 10}
+                y={tick.y + 4}
+                className="fill-slate-400 text-[10px] font-medium"
+                textAnchor="end"
+              >
+                {tick.label}
+              </text>
+            </g>
+          ))}
+          {changeRateChart ? (
+            <line
+              x1={CHART_PADDING.left}
+              x2={CHART_WIDTH - CHART_PADDING.right}
+              y1={changeRateChart.zeroY}
+              y2={changeRateChart.zeroY}
+              className="stroke-slate-300"
+              strokeDasharray="4 4"
+              strokeWidth="1"
+            />
+          ) : null}
+          {changeRateChart?.xTicks.map((tick) => (
+            <g key={tick.label}>
+              <line
+                x1={tick.x}
+                x2={tick.x}
+                y1={CHART_HEIGHT - CHART_PADDING.bottom}
+                y2={CHART_HEIGHT - CHART_PADDING.bottom + 5}
+                className="stroke-slate-300"
+                strokeWidth="1"
+              />
+              <text
+                x={tick.x}
+                y={CHART_HEIGHT - CHART_PADDING.bottom + 20}
+                className="fill-slate-400 text-[10px] font-medium"
+                textAnchor="middle"
+              >
+                {tick.label}
+              </text>
+            </g>
+          ))}
+          <text
+            x={CHART_PADDING.left}
+            y={CHART_HEIGHT - 7}
+            className="fill-slate-500 text-[10px] font-bold"
+          >
+            时间
+          </text>
+          <text
+            x={14}
+            y={CHART_PADDING.top + 4}
+            className="fill-slate-500 text-[10px] font-bold"
+            transform={`rotate(-90 14 ${CHART_PADDING.top + 4})`}
+          >
+            涨跌幅
+          </text>
           <path
-            d={buildSvgPath(normalizeIntradayChartPoints(points, 640, 160))}
+            d={changeRateChart?.path ?? ''}
             className={`fill-none ${marketToneClasses[chartTone].stroke}`}
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeWidth="3"
           />
+          {changeRateChart?.chartPoints.map(({ x, y, point }) => (
+            <circle
+              key={point.minuteKey}
+              cx={x}
+              cy={y}
+              r="2.5"
+              className={marketToneClasses[chartTone].stroke.replace('stroke', 'fill')}
+            />
+          ))}
         </svg>
       )}
 

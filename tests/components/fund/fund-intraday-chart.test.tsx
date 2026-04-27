@@ -64,6 +64,11 @@ describe('FundIntradayChart', () => {
     );
 
     expect(screen.getByTestId('fund-intraday-chart')).toBeTruthy();
+    expect(screen.getByText('涨跌幅')).toBeTruthy();
+    expect(screen.getByText('时间')).toBeTruthy();
+    expect(screen.getByText('10:30')).toBeTruthy();
+    expect(screen.getByText('10:32')).toBeTruthy();
+    expect(screen.getByText('+1.10%')).toBeTruthy();
     expect(screen.getByText('10:32 更新')).toBeTruthy();
     expect(screen.getByText('置信度中')).toBeTruthy();
     expect(screen.getByText('3/240')).toBeTruthy();
