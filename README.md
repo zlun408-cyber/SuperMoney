@@ -34,6 +34,44 @@ npm test
 npm run test:e2e
 ```
 
+## 一键部署
+
+默认部署到当前生产服务器，并用 PM2 重启 `superfinance`：
+
+```bash
+npm run deploy
+```
+
+脚本会自动执行：
+
+1. 本地生产构建校验：`npm run build`
+2. 同步代码到服务器：`/opt/superfinance`
+3. 服务器安装依赖：`npm ci`
+4. 服务器生产构建：`npm run build`
+5. 精简生产依赖：`npm prune --omit=dev`
+6. 重启 PM2 服务：`superfinance`
+7. 检查公开域名：`https://www.cofundonline.com/`
+
+可选配置：
+
+```bash
+# 部署前额外跑测试
+RUN_TESTS=1 npm run deploy
+
+# 首次部署新服务器时，把本地 .env.local 一起同步过去
+SYNC_ENV=1 npm run deploy
+
+# 修改目标服务器或域名
+DEPLOY_HOST=124.243.149.183 \
+DEPLOY_USER=root \
+DEPLOY_DIR=/opt/superfinance \
+SSH_KEY=/Users/zhanglun/Downloads/demo-zhanglun.pem \
+HEALTH_URL=https://www.cofundonline.com/ \
+npm run deploy
+```
+
+默认不会同步 `.env.local`，避免覆盖服务器环境配置；如果服务器缺少 `.env.local`，脚本会提示使用 `SYNC_ENV=1` 执行一次。
+
 ## 项目结构
 
 ```
