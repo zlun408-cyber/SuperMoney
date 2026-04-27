@@ -7,6 +7,22 @@ import {
 } from '@/lib/funds/estimate-intraday';
 import type { EstimateIntradayPoint } from '@/lib/funds/types';
 
+const getMarketTone = (value: number | null) => {
+  if (typeof value !== 'number') {
+    return 'neutral';
+  }
+
+  if (value > 0) {
+    return 'up';
+  }
+
+  if (value < 0) {
+    return 'down';
+  }
+
+  return 'neutral';
+};
+
 export function FundIntradaySparkline({ points }: { points: EstimateIntradayPoint[] }) {
   const summary = buildIntradaySummary(points);
 
@@ -25,16 +41,17 @@ export function FundIntradaySparkline({ points }: { points: EstimateIntradayPoin
     normalized.length > 1
       ? `${path} L ${normalized.at(-1)?.x ?? 120} 36 L ${normalized[0].x} 36 Z`
       : '';
+  const marketTone = getMarketTone(summary.latestChangeRate);
   const strokeClass =
-    summary.trend === 'down'
+    marketTone === 'down'
       ? 'stroke-emerald-500'
-      : summary.trend === 'up'
+      : marketTone === 'up'
         ? 'stroke-rose-500'
         : 'stroke-amber-500';
   const fillClass =
-    summary.trend === 'down'
+    marketTone === 'down'
       ? 'fill-emerald-100/70'
-      : summary.trend === 'up'
+      : marketTone === 'up'
         ? 'fill-rose-100/70'
         : 'fill-amber-100/70';
 
@@ -67,7 +84,7 @@ export function FundIntradaySparkline({ points }: { points: EstimateIntradayPoin
       />
       {latestPoint ? (
         <circle
-          className={summary.trend === 'down' ? 'fill-emerald-500' : summary.trend === 'up' ? 'fill-rose-500' : 'fill-amber-500'}
+          className={marketTone === 'down' ? 'fill-emerald-500' : marketTone === 'up' ? 'fill-rose-500' : 'fill-amber-500'}
           cx={latestPoint.x}
           cy={latestPoint.y}
           data-testid="fund-intraday-sparkline-latest"

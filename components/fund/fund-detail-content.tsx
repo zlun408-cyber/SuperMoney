@@ -261,8 +261,6 @@ export function FundDetailContent({ code }: FundDetailContentProps) {
       <SipPlanList plans={sipPlans} executionRecords={executionRecords} />
       <AddTransactionDialog
         fundCode={code}
-        fallbackNav={quote?.estimatedNav ?? null}
-        fallbackNavDescription={quote?.updatedAt ? `估值时间：${quote.updatedAt}` : undefined}
         onAddTransaction={addTransactionHandler}
         validateBusinessRules={validateTransactionBusinessRules}
         {...dialogProps}

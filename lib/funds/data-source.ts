@@ -110,7 +110,12 @@ export interface FundHistoryNavPayload {
 
 export async function fetchFundHistoryNavScript(code: string, startDate: string, endDate: string): Promise<string> {
   const url = `https://fund.eastmoney.com/f10/F10DataApi.aspx?type=lsjz&code=${code}&page=1&sdate=${startDate}&edate=${endDate}&per=20`;
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    headers: {
+      Referer: `https://fundf10.eastmoney.com/jjjz_${code}.html`,
+      'User-Agent': 'Mozilla/5.0',
+    },
+  });
 
   if (!response.ok) {
     throw new Error(`Failed to fetch fund history nav script: ${code}`);
@@ -120,7 +125,7 @@ export async function fetchFundHistoryNavScript(code: string, startDate: string,
 }
 
 export function extractHistoryNavPayload(script: string, targetDate: string): FundHistoryNavPayload | null {
-  const dateRegex = new RegExp(`<td>${targetDate}</td>\\s*<td[^>]*class="(?:wbg)?">([^<]+)</td>`, 'i');
+  const dateRegex = new RegExp(`<td>${targetDate}</td>\\s*<td[^>]*>([^<]+)</td>`, 'i');
   const match = script.match(dateRegex);
 
   if (!match || !match[1]) {

@@ -8,8 +8,6 @@ import type { FundTradePeriod, FundTransaction, FundTransactionType } from '@/li
 type AddTransactionDialogProps =
   | {
       fundCode: string;
-      fallbackNav?: number | null;
-      fallbackNavDescription?: string;
       onAddTransaction: (transaction: FundTransaction) => void;
       editingTransaction?: null;
       onUpdateTransaction?: never;
@@ -18,8 +16,6 @@ type AddTransactionDialogProps =
     }
   | {
       fundCode: string;
-      fallbackNav?: number | null;
-      fallbackNavDescription?: string;
       onAddTransaction: (transaction: FundTransaction) => void;
       editingTransaction: FundTransaction;
       onUpdateTransaction: (transaction: FundTransaction) => void;
@@ -224,8 +220,6 @@ function getFormValues(transaction: FundTransaction) {
 
 export function AddTransactionDialog({
   fundCode,
-  fallbackNav = null,
-  fallbackNavDescription,
   onAddTransaction,
   editingTransaction = null,
   onUpdateTransaction,
@@ -270,12 +264,7 @@ export function AddTransactionDialog({
   const isEditing = editingTransaction !== null;
   const isFormOpen = isEditing || open;
   const usesNav = type !== 'cash_dividend';
-  const resolvedFallbackNav =
-    typeof fallbackNav === 'number' && Number.isFinite(fallbackNav) && fallbackNav > 0
-      ? fallbackNav
-      : null;
   const resolvedAutoNav = !isEditing && usesNav && autoNavState.error === null ? autoNavState.nav : null;
-  const resolvedCreateNav = resolvedAutoNav ?? (!isEditing && usesNav ? resolvedFallbackNav : null);
   const shouldShowManualNavInput = usesNav && isEditing;
   const createRequiresAutoNav = !isEditing && usesNav;
   const amountLabel = type === 'sell' ? '份额' : '金额';
@@ -336,8 +325,8 @@ export function AddTransactionDialog({
       return null;
     }
 
-    if (!isEditing && resolvedCreateNav !== null) {
-      return resolvedCreateNav;
+    if (!isEditing && resolvedAutoNav !== null) {
+      return resolvedAutoNav;
     }
 
     return null;
@@ -353,7 +342,7 @@ export function AddTransactionDialog({
         resolvedNav: getResolvedNav(nextInput),
         allowManualNav: !createRequiresAutoNav,
         navErrorMessage: createRequiresAutoNav
-          ? '未能自动获取净值，请确认交易日期和下单时段后重试'
+          ? '生效日净值尚未公布，请稍后再保存'
           : undefined,
       }).errors,
     );
@@ -365,7 +354,7 @@ export function AddTransactionDialog({
       resolvedNav: getResolvedNav(currentInput),
       allowManualNav: !createRequiresAutoNav,
       navErrorMessage: createRequiresAutoNav
-        ? '未能自动获取净值，请确认交易日期和下单时段后重试'
+        ? '生效日净值尚未公布，请稍后再保存'
         : undefined,
     });
     if (Object.keys(errors).length > 0) {
@@ -577,21 +566,13 @@ export function AddTransactionDialog({
                 </div>
               ) : null}
 
-              {!isEditing && autoNavState.error && resolvedFallbackNav !== null ? (
-                <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-3 text-sm text-blue-700">
-                  <p className="font-medium text-blue-900">已使用当前估值作为净值</p>
-                  <p className="mt-1 text-base font-semibold text-blue-900">{resolvedFallbackNav.toFixed(4)}</p>
-                  <p className="mt-1 text-xs text-blue-800">
-                    历史净值暂未返回，系统已自动改用基金数据源的当前估值。
-                    {fallbackNavDescription ? ` ${fallbackNavDescription}` : ''}
+              {!isEditing && autoNavState.error ? (
+                <div className="rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm text-slate-600">
+                  <p className="font-medium text-slate-900">生效日净值暂未获取</p>
+                  <p className="mt-1">
+                    系统会严格按交易日期和 15 点规则取历史净值：15 点前取当日，15 点后取次日。
+                    如果该日期净值尚未公布，请稍后再保存。
                   </p>
-                </div>
-              ) : null}
-
-              {!isEditing && autoNavState.error && resolvedFallbackNav === null ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-700">
-                  <p className="font-medium text-amber-900">净值数据暂不可用</p>
-                  <p className="mt-1">请稍后重试，或先刷新基金估值后再保存。</p>
                   {fieldErrors.nav ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.nav}</p> : null}
                 </div>
               ) : null}

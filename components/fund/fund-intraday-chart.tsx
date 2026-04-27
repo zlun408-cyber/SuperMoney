@@ -53,11 +53,42 @@ function formatAmplitudePercent(
   return `${(((highEstimatedNav - lowEstimatedNav) / firstEstimatedNav) * 100).toFixed(2)}%`;
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function getMarketTone(value: number | null) {
+  if (typeof value !== 'number') {
+    return 'neutral';
+  }
+
+  if (value > 0) {
+    return 'up';
+  }
+
+  if (value < 0) {
+    return 'down';
+  }
+
+  return 'neutral';
+}
+
+const marketToneClasses = {
+  up: {
+    text: 'text-rose-600',
+    stroke: 'stroke-rose-500',
+  },
+  down: {
+    text: 'text-emerald-600',
+    stroke: 'stroke-emerald-500',
+  },
+  neutral: {
+    text: 'text-slate-900',
+    stroke: 'stroke-slate-500',
+  },
+} as const;
+
+function Metric({ label, value, colorClass }: { label: string; value: string; colorClass?: string }) {
   return (
     <div className="rounded-lg bg-slate-50 p-3">
       <p className="text-sm text-slate-500">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-slate-900">{value}</p>
+      <p className={`mt-1 text-lg font-semibold ${colorClass ?? 'text-slate-900'}`}>{value}</p>
     </div>
   );
 }
@@ -70,6 +101,9 @@ export function FundIntradayChart({
   trustSignal?: EstimateIntradayTrustSignal;
 }) {
   const summary = buildIntradaySummary(points);
+  const chartTone = getMarketTone(summary.latestChangeRate);
+  const changeFromFirstTone = getMarketTone(summary.changeRateFromFirst);
+  const latestChangeTone = getMarketTone(summary.latestChangeRate);
 
   return (
     <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
@@ -121,7 +155,7 @@ export function FundIntradayChart({
         >
           <path
             d={buildSvgPath(normalizeIntradayChartPoints(points, 640, 160))}
-            className="fill-none stroke-emerald-500"
+            className={`fill-none ${marketToneClasses[chartTone].stroke}`}
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeWidth="3"
@@ -133,8 +167,16 @@ export function FundIntradayChart({
         <Metric label="当前估值" value={formatNav(summary.latestEstimatedNav)} />
         <Metric label="今日最高" value={formatNav(summary.highEstimatedNav)} />
         <Metric label="今日最低" value={formatNav(summary.lowEstimatedNav)} />
-        <Metric label="开盘至今" value={formatPercent(summary.changeRateFromFirst)} />
-        <Metric label="最新涨跌" value={formatPercent(summary.latestChangeRate)} />
+        <Metric
+          label="开盘至今"
+          value={formatPercent(summary.changeRateFromFirst)}
+          colorClass={marketToneClasses[changeFromFirstTone].text}
+        />
+        <Metric
+          label="最新涨跌"
+          value={formatPercent(summary.latestChangeRate)}
+          colorClass={marketToneClasses[latestChangeTone].text}
+        />
         <Metric
           label="日内振幅"
           value={formatAmplitudePercent(

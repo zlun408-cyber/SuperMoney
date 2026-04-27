@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  extractHistoryNavPayload,
   fetchFundEstimateScript,
   fetchFundQuotesFromSource,
 } from '@/lib/funds/data-source';
@@ -63,5 +64,17 @@ describe('fund data source', () => {
         updatedAt: '2026-04-24 14:30',
       },
     ]);
+  });
+
+  it('extracts historical nav from Eastmoney table cells with multiple classes', () => {
+    const payload = extractHistoryNavPayload(
+      `var apidata={ content:"<table><tbody><tr><td>2026-04-24</td><td class='tor bold'>2.5468</td><td class='tor bold'>2.5468</td></tr></tbody></table>",records:1};`,
+      '2026-04-24',
+    );
+
+    expect(payload).toMatchObject({
+      date: '2026-04-24',
+      dwjz: '2.5468',
+    });
   });
 });

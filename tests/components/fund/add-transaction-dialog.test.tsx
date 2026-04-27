@@ -76,7 +76,7 @@ describe('AddTransactionDialog', () => {
     );
   });
 
-  it('uses the current estimated nav instead of asking for manual nav when historical nav lookup fails', async () => {
+  it('blocks saving a new buy transaction without asking for manual nav when historical nav lookup fails', async () => {
     setAutoNavState({
       error: '净值未找到，请确认交易日期和下单时段后重试',
       effectiveDate: '2026-04-08',
@@ -84,34 +84,22 @@ describe('AddTransactionDialog', () => {
 
     const onAddTransaction = vi.fn();
 
-    render(
-      <AddTransactionDialog
-        fundCode="000001"
-        fallbackNav={1.05}
-        fallbackNavDescription="估值时间：2026-04-08 14:30"
-        onAddTransaction={onAddTransaction}
-      />,
-    );
+    render(<AddTransactionDialog fundCode="000001" onAddTransaction={onAddTransaction} />);
 
     fireEvent.click(screen.getByRole('button', { name: '添加交易记录' }));
     fireEvent.change(screen.getByLabelText('交易日期'), { target: { value: '2026-04-08' } });
     fireEvent.change(screen.getByLabelText('金额'), { target: { value: '100' } });
 
     await waitFor(() => {
-      expect(screen.getByText('已使用当前估值作为净值')).toBeTruthy();
-      expect(screen.getByText('1.0500')).toBeTruthy();
+      expect(screen.getByText('生效日净值暂未获取')).toBeTruthy();
+      expect(screen.getByText(/15 点前取当日，15 点后取次日/)).toBeTruthy();
       expect(screen.queryByRole('textbox', { name: '净值' })).toBeNull();
     });
 
     fireEvent.click(screen.getByRole('button', { name: '保存记录' }));
 
-    expect(onAddTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'buy',
-        amount: 100,
-        confirmedNav: 1.05,
-      }),
-    );
+    expect(screen.getByText('生效日净值尚未公布，请稍后再保存')).toBeTruthy();
+    expect(onAddTransaction).not.toHaveBeenCalled();
   });
 
   it('keeps the saved nav in edit mode until the user explicitly refreshes it', async () => {
