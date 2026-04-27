@@ -6,6 +6,12 @@ export interface AuthCredentials {
   password: string;
 }
 
+export interface AuthSignUpCredentials extends AuthCredentials {
+  options?: {
+    emailRedirectTo?: string;
+  };
+}
+
 export interface SupabaseUserLike {
   id: string;
   email?: string | null;
@@ -32,7 +38,7 @@ export interface SupabaseAuthClientLike {
     };
   };
   signInWithPassword: (credentials: AuthCredentials) => Promise<{ error: Error | null }>;
-  signUp: (credentials: AuthCredentials) => Promise<{ error: Error | null }>;
+  signUp: (credentials: AuthSignUpCredentials) => Promise<{ error: Error | null }>;
   signOut: () => Promise<{ error: Error | null }>;
 }
 

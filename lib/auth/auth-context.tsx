@@ -20,6 +20,14 @@ interface SessionState {
   session: SupabaseSessionLike | null;
 }
 
+const getCurrentOrigin = (): string | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  return window.location.origin;
+};
+
 export function AuthProvider({ children, authClient }: AuthProviderProps) {
   const browserClient = createSupabaseBrowserClient();
   const authApi = authClient ?? (browserClient ? browserClient.auth : null);
@@ -155,7 +163,15 @@ export function AuthProvider({ children, authClient }: AuthProviderProps) {
           throw new Error('Supabase 未配置，无法注册');
         }
 
-        const { error } = await authApi.signUp(credentials);
+        const currentOrigin = getCurrentOrigin();
+        const { error } = await authApi.signUp({
+          ...credentials,
+          options: currentOrigin
+            ? {
+                emailRedirectTo: currentOrigin,
+              }
+            : undefined,
+        });
 
         if (error) {
           throw error;
