@@ -1,9 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createIntradayAnalyticsEvent,
   summarizeIntradayAnalyticsEvents,
 } from '@/lib/analytics/intraday-analytics';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe('createIntradayAnalyticsEvent', () => {
   it('fills required fields and keeps normalized optional fields', () => {
@@ -61,6 +65,18 @@ describe('createIntradayAnalyticsEvent', () => {
       occurredAt: '2026-04-20T02:31:00.000Z',
       meta: null,
     });
+  });
+
+  it('falls back to a non-secure-context-safe id when crypto.randomUUID is unavailable', () => {
+    vi.stubGlobal('crypto', {});
+
+    const event = createIntradayAnalyticsEvent({
+      eventName: 'watchlist_manual_refresh_clicked',
+      page: 'home',
+      occurredAt: '2026-04-20T02:31:00.000Z',
+    });
+
+    expect(event.id).toMatch(/^intraday-[a-z0-9]+-[a-z0-9]+$/);
   });
 });
 

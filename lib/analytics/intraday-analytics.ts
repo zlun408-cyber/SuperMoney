@@ -77,11 +77,24 @@ const normalizeOptionalString = (value?: string | null): string | null =>
 const normalizeOptionalNumber = (value?: number | null): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? value : null;
 
+const createFallbackEventId = (): string =>
+  `intraday-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
+const createIntradayAnalyticsEventId = (): string => {
+  const randomUUID = globalThis.crypto?.randomUUID;
+
+  if (typeof randomUUID === 'function') {
+    return randomUUID.call(globalThis.crypto);
+  }
+
+  return createFallbackEventId();
+};
+
 export function createIntradayAnalyticsEvent(
   input: CreateIntradayAnalyticsEventInput,
 ): IntradayAnalyticsEvent {
   return {
-    id: crypto.randomUUID(),
+    id: createIntradayAnalyticsEventId(),
     eventName: input.eventName,
     page: input.page,
     occurredAt: input.occurredAt ?? new Date().toISOString(),
