@@ -37,7 +37,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<NavApiResp
           success: false,
           error: {
             code: 'NAV_NOT_FOUND',
-            message: '净值未找到，请手动输入',
+            message: '净值未找到，请确认交易日期和下单时段后重试',
           },
         },
         { status: 404 }

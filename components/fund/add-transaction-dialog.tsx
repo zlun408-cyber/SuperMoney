@@ -101,6 +101,8 @@ function resolveTransaction(
   input: TransactionFormInput,
   options?: {
     resolvedNav?: number | null;
+    allowManualNav?: boolean;
+    navErrorMessage?: string;
   }
 ): { errors: FieldErrors; transaction: FundTransaction | null } {
   const errors: FieldErrors = {};
@@ -116,10 +118,12 @@ function resolveTransaction(
   }
 
   if (input.type !== 'cash_dividend') {
-    const nav = options?.resolvedNav ?? Number(input.nav);
+    const nav =
+      options?.resolvedNav ??
+      (options?.allowManualNav === false ? Number.NaN : Number(input.nav));
 
     if (!Number.isFinite(nav) || nav <= 0) {
-      errors.nav = '请输入大于 0 的净值';
+      errors.nav = options?.navErrorMessage ?? '请输入大于 0 的净值';
     }
   }
 
@@ -261,7 +265,8 @@ export function AddTransactionDialog({
   const isFormOpen = isEditing || open;
   const usesNav = type !== 'cash_dividend';
   const resolvedAutoNav = !isEditing && usesNav && autoNavState.error === null ? autoNavState.nav : null;
-  const shouldShowManualNavInput = usesNav && (isEditing || autoNavState.error !== null);
+  const shouldShowManualNavInput = usesNav && isEditing;
+  const createRequiresAutoNav = !isEditing && usesNav;
   const amountLabel = type === 'sell' ? '份额' : '金额';
   const title = isEditing ? '编辑交易记录' : '交易记录';
   const description = isEditing ? '修改已有交易记录。' : '添加买入、卖出、现金分红或红利再投资记录。';
@@ -335,6 +340,10 @@ export function AddTransactionDialog({
     setFieldErrors(
       resolveTransaction(nextInput, {
         resolvedNav: getResolvedNav(nextInput),
+        allowManualNav: !createRequiresAutoNav,
+        navErrorMessage: createRequiresAutoNav
+          ? '未能自动获取净值，请确认交易日期和下单时段后重试'
+          : undefined,
       }).errors,
     );
   };
@@ -343,6 +352,10 @@ export function AddTransactionDialog({
     const currentInput = getCurrentFormInput();
     const { errors, transaction } = resolveTransaction(currentInput, {
       resolvedNav: getResolvedNav(currentInput),
+      allowManualNav: !createRequiresAutoNav,
+      navErrorMessage: createRequiresAutoNav
+        ? '未能自动获取净值，请确认交易日期和下单时段后重试'
+        : undefined,
     });
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
@@ -553,6 +566,15 @@ export function AddTransactionDialog({
                 </div>
               ) : null}
 
+              {!isEditing && autoNavState.error ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-700">
+                  <p className="font-medium text-amber-900">未能自动获取净值</p>
+                  <p className="mt-1">{autoNavState.error}</p>
+                  {navHint ? <p className="mt-1 text-xs text-amber-800">{navHint}</p> : null}
+                  {fieldErrors.nav ? <p className="mt-1 text-sm text-rose-600">{fieldErrors.nav}</p> : null}
+                </div>
+              ) : null}
+
               {shouldShowManualNavInput ? (
                 <label className="grid gap-1 text-sm text-slate-700" htmlFor={navInputId}>
                   <span>净值</span>
@@ -610,7 +632,12 @@ export function AddTransactionDialog({
           {businessError ? <p className="text-sm text-rose-600">{businessError}</p> : null}
 
           <div className="flex gap-2">
-            <button className="rounded-lg bg-emerald-600 px-3 py-2 text-sm text-white" onClick={handleSave} type="button">
+            <button
+              className="rounded-lg bg-emerald-600 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={createRequiresAutoNav && autoNavState.loading}
+              onClick={handleSave}
+              type="button"
+            >
               {isEditing ? '保存修改' : '保存记录'}
             </button>
             <button className="rounded-lg border border-slate-300 px-3 py-2 text-sm" onClick={handleCancel} type="button">

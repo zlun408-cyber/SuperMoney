@@ -51,7 +51,7 @@ export function useAutoNav(): AutoNavResult {
       if (!result.success) {
         setState({
           loading: false,
-          error: result.error?.message || '净值获取失败',
+          error: result.error?.message || '净值获取失败，请确认交易日期和下单时段后重试',
           nav: null,
           source: null,
           effectiveDate,
@@ -70,7 +70,7 @@ export function useAutoNav(): AutoNavResult {
     } catch {
       setState({
         loading: false,
-        error: '网络请求失败，请手动输入净值',
+        error: '网络请求失败，请稍后重试',
         nav: null,
         source: null,
         effectiveDate,

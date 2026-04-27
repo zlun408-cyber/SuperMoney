@@ -76,9 +76,9 @@ describe('AddTransactionDialog', () => {
     );
   });
 
-  it('falls back to manual nav input when auto nav lookup fails', async () => {
+  it('blocks saving a new buy transaction instead of asking for manual nav when auto nav lookup fails', async () => {
     setAutoNavState({
-      error: '净值未找到，请手动输入',
+      error: '净值未找到，请确认交易日期和下单时段后重试',
       effectiveDate: '2026-04-08',
     });
 
@@ -91,20 +91,15 @@ describe('AddTransactionDialog', () => {
     fireEvent.change(screen.getByLabelText('金额'), { target: { value: '100' } });
 
     await waitFor(() => {
-      expect(screen.getByText('净值未找到，请手动输入')).toBeTruthy();
-      expect(screen.getByRole('textbox', { name: '净值' })).toBeTruthy();
+      expect(screen.getByText('未能自动获取净值')).toBeTruthy();
+      expect(screen.getByText('净值未找到，请确认交易日期和下单时段后重试')).toBeTruthy();
+      expect(screen.queryByRole('textbox', { name: '净值' })).toBeNull();
     });
 
-    fireEvent.change(screen.getByRole('textbox', { name: '净值' }), { target: { value: '1.2345' } });
     fireEvent.click(screen.getByRole('button', { name: '保存记录' }));
 
-    expect(onAddTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'buy',
-        amount: 100,
-        confirmedNav: 1.2345,
-      }),
-    );
+    expect(screen.getByText('未能自动获取净值，请确认交易日期和下单时段后重试')).toBeTruthy();
+    expect(onAddTransaction).not.toHaveBeenCalled();
   });
 
   it('keeps the saved nav in edit mode until the user explicitly refreshes it', async () => {
