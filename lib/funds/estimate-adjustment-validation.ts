@@ -16,6 +16,9 @@ export interface EstimateAdjustmentValidationFundItem {
   baselineAverageAbsoluteErrorRate: number | null;
   adjustedAverageAbsoluteErrorRate: number | null;
   improvementRate: number | null;
+  validationSampleCount: number;
+  averageAbsoluteErrorRate: number | null;
+  averageImprovementRate: number | null;
   recommendationStatus: 'keep' | 'review' | 'downgrade';
   recommendationLabel: string;
   recommendationReason: string;
@@ -23,6 +26,7 @@ export interface EstimateAdjustmentValidationFundItem {
 
 export interface EstimateAdjustmentValidationSummary {
   validatedFundCount: number;
+  recheckFundCount: number;
   sampleCount: number;
   improvedSampleCount: number;
   worsenedSampleCount: number;
@@ -30,6 +34,7 @@ export interface EstimateAdjustmentValidationSummary {
   baselineAverageAbsoluteErrorRate: number | null;
   adjustedAverageAbsoluteErrorRate: number | null;
   improvementRate: number | null;
+  improvementCoverage: number;
   funds: EstimateAdjustmentValidationFundItem[];
 }
 
@@ -207,6 +212,9 @@ export const buildEstimateAdjustmentValidationSummary = (
         baselineAverageAbsoluteErrorRate: fundBaselineAverage,
         adjustedAverageAbsoluteErrorRate: fundAdjustedAverage,
         improvementRate,
+        validationSampleCount: items.length,
+        averageAbsoluteErrorRate: fundAdjustedAverage,
+        averageImprovementRate: improvementRate,
         ...recommendation,
       } satisfies EstimateAdjustmentValidationFundItem;
     })
@@ -229,6 +237,7 @@ export const buildEstimateAdjustmentValidationSummary = (
 
   return {
     validatedFundCount: funds.length,
+    recheckFundCount: funds.filter((fund) => fund.recommendationStatus !== 'keep').length,
     sampleCount: validationSamples.length,
     improvedSampleCount,
     worsenedSampleCount,
@@ -242,6 +251,8 @@ export const buildEstimateAdjustmentValidationSummary = (
         ? (baselineAverageAbsoluteErrorRate - adjustedAverageAbsoluteErrorRate) /
           baselineAverageAbsoluteErrorRate
         : null,
+    improvementCoverage:
+      validationSamples.length > 0 ? improvedSampleCount / validationSamples.length : 0,
     funds,
   };
 };

@@ -108,7 +108,8 @@ describe('WatchlistTable adjustment preview status', () => {
     const row = screen.getByRole('row', { name: /测试基金/ });
     expect(within(row).getByText('1.05')).toBeTruthy();
     expect(within(row).getByText('修正预览可用')).toBeTruthy();
-    expect(within(row).getByText(/详情页可切换/)).toBeTruthy();
+    expect(within(row).getByText('首页仍显示原始估值，修正预览请到详情页查看')).toBeTruthy();
+    expect(within(row).queryByText(/差额/)).toBeNull();
   });
 
   it.each([
@@ -139,7 +140,7 @@ describe('WatchlistTable adjustment preview status', () => {
       const row = screen.getByRole('row', { name: /测试基金/ });
       expect(within(row).getByText('1.05')).toBeTruthy();
       expect(within(row).queryByText('修正预览可用')).toBeNull();
-      expect(within(row).queryByText(/详情页可切换/)).toBeNull();
+      expect(within(row).queryByText(/首页仍显示原始估值/)).toBeNull();
     },
   );
 
@@ -178,6 +179,61 @@ describe('WatchlistTable adjustment preview status', () => {
     );
 
     expect(screen.queryByText('修正预览可用')).toBeNull();
+  });
+
+  it('labels manual position-derived holding and profit clearly on the homepage', () => {
+    render(
+      <WatchlistTable
+        funds={[baseFund]}
+        quotesByCode={{
+          '000001': baseQuote,
+        }}
+        onEditPosition={vi.fn()}
+        onRemoveFund={vi.fn()}
+      />,
+    );
+
+    const row = screen.getByRole('row', { name: /测试基金/ });
+    expect(within(row).getByText('手工持仓')).toBeTruthy();
+    expect(within(row).getByText('按手工持仓估算')).toBeTruthy();
+    expect(within(row).getByText('成本 1000.00 / 份额 500.00')).toBeTruthy();
+    expect(within(row).getByText('-475.00')).toBeTruthy();
+  });
+
+  it('labels transaction-ledger-derived holding and profit clearly on the homepage', () => {
+    render(
+      <WatchlistTable
+        funds={[
+          {
+            ...baseFund,
+            transactions: [
+              {
+                id: 'tx-1',
+                type: 'buy',
+                amount: 1000,
+                confirmedNav: 1,
+                fee: 0,
+                placedDate: '2026-04-10',
+                placedPeriod: 'before_1500',
+                effectiveDate: '2026-04-10',
+                source: 'manual',
+              },
+            ],
+          },
+        ]}
+        quotesByCode={{
+          '000001': baseQuote,
+        }}
+        onEditPosition={vi.fn()}
+        onRemoveFund={vi.fn()}
+      />,
+    );
+
+    const row = screen.getByRole('row', { name: /测试基金/ });
+    expect(within(row).getByText('交易记录')).toBeTruthy();
+    expect(within(row).getByText('按交易记录估算')).toBeTruthy();
+    expect(within(row).getByText('成本 1000.00 / 份额 1000.00')).toBeTruthy();
+    expect(within(row).getByText('50.00')).toBeTruthy();
   });
 
   it('renders intraday trend beside fund name and a sparkline column', () => {

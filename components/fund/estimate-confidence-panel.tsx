@@ -32,33 +32,38 @@ export function EstimateConfidencePanel({
   confidenceLevel,
 }: EstimateConfidencePanelProps) {
   return (
-    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+    <div className="rounded-2xl border border-slate-200 bg-slate-50/30 p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium text-slate-900">估值可信度</p>
-          {confidenceLevel === 'unknown' ? (
-            <p className="mt-1 text-sm text-slate-600">
-              暂无足够已收敛样本，估值可信度暂不可判断。
-            </p>
-          ) : null}
+        <div className="flex items-center gap-3">
+           <svg className="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+          <div>
+            <p className="text-sm font-bold text-slate-900">估值可信度</p>
+            {confidenceLevel === 'unknown' && (
+              <p className="text-xs text-slate-500">
+                暂无足够已收敛样本，估值可信度暂不可判断。
+              </p>
+            )}
+          </div>
         </div>
         <span
-          className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ring-1 ${confidenceStyles[confidenceLevel]}`}
+          className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ring-1 ${confidenceStyles[confidenceLevel]}`}
         >
           {confidenceLabels[confidenceLevel]}
         </span>
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <div className="rounded-lg bg-white p-3">
-          <p className="text-sm text-slate-500">已收敛样本数</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-100">
+          <p className="text-[10px] font-bold uppercase text-slate-400">已收敛样本</p>
+          <p className="mt-1 text-sm font-bold text-slate-900">
             {summary.resolvedSampleCount} / {summary.sampleCount}
           </p>
         </div>
-        <div className="rounded-lg bg-white p-3">
-          <p className="text-sm text-slate-500">平均绝对误差</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">
+        <div className="rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-100">
+          <p className="text-[10px] font-bold uppercase text-slate-400">平均绝对误差</p>
+          <p className="mt-1 text-sm font-bold text-slate-900">
             {formatErrorRate(summary.averageAbsoluteErrorRate)}
           </p>
         </div>

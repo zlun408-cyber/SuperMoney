@@ -206,4 +206,78 @@ describe('createSupabaseCloudAccuracyClient', () => {
       },
     );
   });
+
+  it('returns an empty decision list when the adjustment decisions table is missing', async () => {
+    const client = createSupabaseCloudAccuracyClient({
+      from(table: string) {
+        expect(table).toBe('fund_estimate_adjustment_decisions');
+        return {
+          select() {
+            return {
+              eq() {
+                return {
+                  order() {
+                    return Promise.resolve({
+                      data: null,
+                      error: {
+                        code: 'PGRST205',
+                        message: 'Could not find the table public.fund_estimate_adjustment_decisions',
+                      },
+                    });
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+    } as never);
+
+    await expect(client.listAdjustmentDecisions('user-1')).resolves.toEqual([]);
+  });
+
+  it('treats missing cloud tables as no-op during snapshot and decision upserts', async () => {
+    const client = createSupabaseCloudAccuracyClient({
+      from(table: string) {
+        return {
+          upsert: vi.fn().mockResolvedValue({
+            error: {
+              code: 'PGRST205',
+              message: `Could not find the table public.${table}`,
+            },
+          }),
+        };
+      },
+    } as never);
+
+    await expect(
+      client.upsertSnapshots('user-1', [
+        {
+          snapshotKey: '000001::2026-04-13 14:30',
+          fundCode: '000001',
+          fundName: '基金A',
+          quoteUpdatedAt: '2026-04-13T06:30:00.000Z',
+          quoteUpdatedAtRaw: '2026-04-13 14:30',
+          quoteTimeSemantics: 'china_local',
+          tradingDate: '2026-04-13',
+          estimatedNav: 1.23,
+          clientCreatedAt: '2026-04-13T06:30:00.000Z',
+          clientUpdatedAt: '2026-04-13T06:30:00.000Z',
+        },
+      ]),
+    ).resolves.toBeUndefined();
+
+    await expect(
+      client.upsertAdjustmentDecisions('user-1', [
+        {
+          fundCode: '000001',
+          fundName: '基金A',
+          status: 'validated',
+          decisionUpdatedAt: '2026-04-14T09:00:00.000Z',
+          history: [{ status: 'validated', updatedAt: '2026-04-14T09:00:00.000Z' }],
+        },
+      ]),
+    ).resolves.toBeUndefined();
+  });
+
 });

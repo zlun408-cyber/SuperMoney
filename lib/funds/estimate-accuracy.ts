@@ -256,6 +256,14 @@ export const summarizeEstimateAccuracy = (
     (sum, snapshot) => sum + (snapshot.absoluteErrorRate ?? 0),
     0,
   );
+  const signedErrorRates = resolved
+    .map((snapshot) =>
+      snapshot.finalNav !== null && snapshot.finalNav > 0
+        ? (snapshot.estimatedNav - snapshot.finalNav) / snapshot.finalNav
+        : null,
+    )
+    .filter((value): value is number => value !== null);
+  const totalSignedErrorRate = signedErrorRates.reduce((sum, value) => sum + value, 0);
   const resolvedTradingDayCount = new Set(resolved.map((snapshot) => snapshot.tradingDate)).size;
   const highErrorResolvedSampleCount = resolved.filter(
     (snapshot) => (snapshot.absoluteErrorRate ?? 0) > HIGH_ERROR_RATE_THRESHOLD,
@@ -282,6 +290,8 @@ export const summarizeEstimateAccuracy = (
     highErrorResolvedSampleCount,
     averageAbsoluteErrorRate:
       resolved.length > 0 ? totalAbsoluteErrorRate / resolved.length : null,
+    averageSignedErrorRate:
+      signedErrorRates.length > 0 ? totalSignedErrorRate / signedErrorRates.length : null,
     latestQuoteUpdatedAt,
     latestResolvedAt,
   };

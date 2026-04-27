@@ -129,6 +129,8 @@ export function useFundQuotes(
       loadEstimateAdjustmentDecisions,
   );
   const requestSeqRef = useRef(0);
+  const inFlightLoadRef = useRef<Promise<void> | null>(null);
+  const reloadAfterFlightRef = useRef(false);
   const codesKey = codes.join(',');
 
   codesRef.current = codes;
@@ -148,6 +150,13 @@ export function useFundQuotes(
     loadEstimateAdjustmentDecisions;
 
   const loadQuotes = useCallback(async () => {
+    if (inFlightLoadRef.current) {
+      reloadAfterFlightRef.current = true;
+      return inFlightLoadRef.current;
+    }
+
+    let currentLoad: Promise<void>;
+    currentLoad = (async () => {
     requestSeqRef.current += 1;
     const requestId = requestSeqRef.current;
     const isLatestRequest = () => isMountedRef.current && requestId === requestSeqRef.current;
@@ -340,6 +349,19 @@ export function useFundQuotes(
       runIntradaySideEffectsSafely(quotesForAccuracy);
       await runAccuracySideEffectsSafely(quotesForAccuracy);
     }
+    })().finally(async () => {
+      if (inFlightLoadRef.current === currentLoad) {
+        inFlightLoadRef.current = null;
+      }
+
+      if (reloadAfterFlightRef.current && isMountedRef.current) {
+        reloadAfterFlightRef.current = false;
+        await loadQuotes();
+      }
+    });
+
+    inFlightLoadRef.current = currentLoad;
+    return currentLoad;
   }, []);
 
   useEffect(() => {
@@ -347,6 +369,8 @@ export function useFundQuotes(
 
     return () => {
       isMountedRef.current = false;
+      reloadAfterFlightRef.current = false;
+      inFlightLoadRef.current = null;
       requestSeqRef.current += 1;
     };
   }, []);

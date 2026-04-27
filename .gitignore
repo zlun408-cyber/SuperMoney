@@ -6,3 +6,6 @@ node_modules/
 .env*.local
 playwright-report/
 test-results/
+.ccg/.sessions
+.ccg/kick.log
+.ccg/__pycache__/

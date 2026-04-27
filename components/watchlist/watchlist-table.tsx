@@ -41,15 +41,6 @@ function formatNumber(value: number | null | undefined) {
   return typeof value === 'number' ? value.toFixed(2) : '--';
 }
 
-function formatDifference(value: number | null | undefined) {
-  if (typeof value !== 'number') {
-    return '--';
-  }
-
-  const prefix = value > 0 ? '+' : '';
-  return `${prefix}${value.toFixed(4)}`;
-}
-
 function WatchlistTableRow({
   fund,
   quote,
@@ -62,10 +53,10 @@ function WatchlistTableRow({
   const { track, trackOnce } = useIntradayAnalytics();
   const intradaySummary = buildIntradaySummary(intradayPoints);
   const hasAdjustmentPreview = canPreviewAdjustedEstimate(quote);
-  const adjustmentDifference =
-    quote ? (quote.adjustedEstimatedNav ?? quote.estimatedNav) - quote.estimatedNav : null;
-  const ledgerSummary = fund.transactions?.length
-    ? calculateTransactionLedgerSummary(fund.transactions, quote?.estimatedNav)
+  const transactions = fund.transactions ?? [];
+  const hasLedgerSource = transactions.length > 0;
+  const ledgerSummary = hasLedgerSource
+    ? calculateTransactionLedgerSummary(transactions, quote?.estimatedNav)
     : null;
   const summary = calculatePositionSummary({
     cost: fund.position?.cost,
@@ -73,20 +64,26 @@ function WatchlistTableRow({
     shares: fund.position?.shares,
     amount: fund.position?.amount,
   });
-  const holdingText = ledgerSummary
+  const holdingSourceText = hasLedgerSource ? '交易记录' : summary.isComputable ? '手工持仓' : null;
+  const holdingValueText = ledgerSummary
     ? `成本 ${formatNumber(ledgerSummary.currentCost)} / 份额 ${formatNumber(ledgerSummary.currentShares)}`
-    : fund.position?.cost && fund.position?.shares
-      ? `成本 ${formatNumber(fund.position.cost)} / 份额 ${formatNumber(fund.position.shares)}`
-      : '待填写';
-  const profitText = ledgerSummary
-    ? formatNumber(ledgerSummary.unrealizedProfit)
     : summary.isComputable
-      ? formatNumber(summary.profit)
+      ? `成本 ${formatNumber(fund.position?.cost)} / 份额 ${formatNumber(fund.position?.shares)}`
       : '待填写';
+  const profitSourceText = hasLedgerSource ? '按交易记录估算' : summary.isComputable ? '按手工持仓估算' : null;
+  const profitValue = ledgerSummary
+    ? ledgerSummary.unrealizedProfit
+    : summary.isComputable
+      ? summary.profit
+      : null;
   const tradingDate = resolveIntradaySignalTradingDate({
     quoteUpdatedAt: quote?.updatedAt ?? null,
     points: intradayPoints,
   });
+
+  const changeRate = quote?.changeRate ?? 0;
+  const changeColorClass = changeRate > 0 ? 'text-rose-600' : changeRate < 0 ? 'text-emerald-600' : 'text-slate-900';
+  const profitColorClass = (profitValue ?? 0) > 0 ? 'text-rose-600' : (profitValue ?? 0) < 0 ? 'text-emerald-600' : 'text-slate-900';
 
   useEffect(() => {
     trackOnce(`watchlist-row:${fund.code}`, {
@@ -127,49 +124,50 @@ function WatchlistTableRow({
   }, [fund.code, intradayPoints.length, intradayTrustSignal, trackOnce, tradingDate]);
 
   return (
-    <tr>
-      <td className="px-4 py-3 font-medium text-slate-900">
-        <Link
-          className="hover:text-emerald-600 hover:underline"
-          href={`/fund/${fund.code}`}
-          onClick={() => {
-            track({
-              eventName: 'watchlist_fund_clicked',
-              page: 'home',
-              fundCode: fund.code,
-              tradingDate,
-              intradayStatus: intradayTrustSignal?.status ?? null,
-              confidenceLevel: intradayTrustSignal?.confidenceLevel ?? null,
-              coverageRatio: intradayTrustSignal?.coverageRatio ?? null,
-            });
-          }}
-        >
-          {fund.name}
-        </Link>
-        <FundTrendBadge summary={intradaySummary} />
-      </td>
-      <td className="px-4 py-3 text-slate-600">{fund.code}</td>
-      <td className="px-4 py-3 text-slate-900">
-        <div>
-          <p>{formatNumber(quote?.estimatedNav)}</p>
-          {hasAdjustmentPreview ? (
-            <div className="mt-1 space-y-1">
-              <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
-                修正预览可用
-              </span>
-              <p className="text-xs text-slate-500">
-                详情页可切换 · 差额 {formatDifference(adjustmentDifference)}
-              </p>
-            </div>
-          ) : null}
+    <tr className="group transition hover:bg-slate-50/50">
+      <td className="px-6 py-4">
+        <div className="flex flex-col gap-1">
+          <Link
+            className="font-bold text-slate-900 transition hover:text-emerald-600"
+            href={`/fund/${fund.code}`}
+            onClick={() => {
+              track({
+                eventName: 'watchlist_fund_clicked',
+                page: 'home',
+                fundCode: fund.code,
+                tradingDate,
+                intradayStatus: intradayTrustSignal?.status ?? null,
+                confidenceLevel: intradayTrustSignal?.confidenceLevel ?? null,
+                coverageRatio: intradayTrustSignal?.coverageRatio ?? null,
+              });
+            }}
+          >
+            {fund.name}
+          </Link>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs text-slate-400">{fund.code}</span>
+            <FundTrendBadge summary={intradaySummary} />
+          </div>
         </div>
       </td>
-      <td className="px-4 py-3 text-slate-900">{formatPercent(quote?.changeRate)}</td>
-      <td className="px-4 py-3 text-slate-600">
-        <div className="space-y-2">
+      <td className="px-6 py-4">
+        <div className="flex flex-col">
+          <span className="text-base font-bold text-slate-900">{formatNumber(quote?.estimatedNav)}</span>
+          {hasAdjustmentPreview && (
+            <span className="mt-1 inline-flex w-fit items-center rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+              修正可用
+            </span>
+          )}
+        </div>
+      </td>
+      <td className={`px-6 py-4 text-base font-bold ${changeColorClass}`}>
+        {changeRate > 0 ? '+' : ''}{formatPercent(quote?.changeRate)}
+      </td>
+      <td className="px-6 py-4">
+        <div className="flex min-w-[120px] flex-col gap-2">
           <FundIntradaySparkline points={intradayPoints} />
           {intradayTrustSignal ? (
-            <div className="flex flex-wrap items-center gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-1.5">
               <IntradayStatusBadge
                 label={intradayTrustSignal.statusLabel}
                 tone={intradayTrustSignal.statusTone}
@@ -185,23 +183,42 @@ function WatchlistTableRow({
                       : 'muted'
                 }
               />
-              <span className="text-slate-400">{intradayTrustSignal.coverageText}</span>
+              <span className="text-[10px] text-slate-400">{intradayTrustSignal.coverageText}</span>
             </div>
-          ) : null}
+          ) : (
+            <span className="text-[10px] text-slate-300 italic">等待数据中...</span>
+          )}
         </div>
       </td>
-      <td className="px-4 py-3 text-slate-600">{holdingText}</td>
-      <td className="px-4 py-3 text-slate-900">{profitText}</td>
-      <td className="px-4 py-3">
-        <div className="flex gap-2">
+      <td className="px-6 py-4">
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-semibold text-slate-900">{holdingValueText}</span>
+          {holdingSourceText && (
+            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">{holdingSourceText}</span>
+          )}
+        </div>
+      </td>
+      <td className={`px-6 py-4 text-base font-bold ${profitColorClass}`}>
+        <div className="flex flex-col gap-1">
+          <span>{(profitValue ?? 0) > 0 ? '+' : ''}{formatNumber(profitValue)}</span>
+          {profitSourceText && (
+            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">{profitSourceText}</span>
+          )}
+        </div>
+      </td>
+      <td className="px-6 py-4 text-right">
+        <div className="flex items-center justify-end gap-2 opacity-0 transition group-hover:opacity-100">
           <button
-            className="rounded-lg border border-slate-300 px-3 py-1.5 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+            className="rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 transition hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-white"
             disabled={disablePositionEditing}
             onClick={() => onEditPosition(fund)}
           >
-            编辑持仓
+            编辑
           </button>
-          <button className="rounded-lg border border-rose-200 px-3 py-1.5 text-rose-600" onClick={() => onRemoveFund(fund.code)}>
+          <button
+            className="rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-rose-600 shadow-sm ring-1 ring-inset ring-rose-200 transition hover:bg-rose-50 hover:ring-rose-300"
+            onClick={() => onRemoveFund(fund.code)}
+          >
             删除
           </button>
         </div>
@@ -221,42 +238,45 @@ export function WatchlistTable({
 }: WatchlistTableProps) {
   if (funds.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-slate-500">
-        还没有添加基金，请先添加一只基金开始监控。
+      <div className="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50/50 py-20 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white text-slate-300 shadow-sm ring-1 ring-slate-200">
+          <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <h3 className="mt-6 text-sm font-bold text-slate-900">暂无关注基金</h3>
+        <p className="mt-1 text-sm text-slate-500">添加第一只基金，开启分钟级实时估值监控。</p>
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <table className="min-w-full divide-y divide-slate-200 text-sm">
-        <thead className="bg-slate-50 text-left text-slate-600">
+    <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50">
+      <table className="w-full text-left text-sm">
+        <thead className="border-b border-slate-100 bg-slate-50/50 text-xs font-bold uppercase tracking-wider text-slate-400">
           <tr>
-            <th className="px-4 py-3 font-medium">基金</th>
-            <th className="px-4 py-3 font-medium">代码</th>
-            <th className="px-4 py-3 font-medium">当前估值</th>
-            <th className="px-4 py-3 font-medium">涨跌幅</th>
-            <th className="px-4 py-3 font-medium">分钟走势</th>
-            <th className="px-4 py-3 font-medium">持仓</th>
-            <th className="px-4 py-3 font-medium">估算盈亏</th>
-            <th className="px-4 py-3 font-medium">操作</th>
+            <th className="px-6 py-4">基金信息</th>
+            <th className="px-6 py-4">当前估值</th>
+            <th className="px-6 py-4">日内涨跌</th>
+            <th className="px-6 py-4">分钟走势 / 信号</th>
+            <th className="px-6 py-4">持仓详情</th>
+            <th className="px-6 py-4">估算盈亏</th>
+            <th className="px-6 py-4 text-right">操作</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {funds.map((fund) => {
-            return (
-              <WatchlistTableRow
-                key={fund.code}
-                disablePositionEditing={disablePositionEditing}
-                fund={fund}
-                intradayPoints={intradayPointsByCode[fund.code] ?? []}
-                intradayTrustSignal={intradayTrustSignalsByCode[fund.code]}
-                onEditPosition={onEditPosition}
-                onRemoveFund={onRemoveFund}
-                quote={quotesByCode[fund.code]}
-              />
-            );
-          })}
+          {funds.map((fund) => (
+            <WatchlistTableRow
+              key={fund.code}
+              disablePositionEditing={disablePositionEditing}
+              fund={fund}
+              intradayPoints={intradayPointsByCode[fund.code] ?? []}
+              intradayTrustSignal={intradayTrustSignalsByCode[fund.code]}
+              onEditPosition={onEditPosition}
+              onRemoveFund={onRemoveFund}
+              quote={quotesByCode[fund.code]}
+            />
+          ))}
         </tbody>
       </table>
     </div>

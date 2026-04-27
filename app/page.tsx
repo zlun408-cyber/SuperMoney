@@ -112,22 +112,31 @@ export default function HomePage() {
   }, []);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-6 py-10">
-      <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <p className="text-sm font-medium text-emerald-600">SuperFinance</p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">基金实时估值监控</h1>
-          <p className="mt-2 text-slate-600">先聚焦自选基金列表，分钟级查看估值、持仓与估算盈亏。</p>
-          <p className="mt-2 text-sm text-slate-500">
-            <Link className="transition hover:text-slate-700 hover:underline" href="/accuracy">
-              查看估值准确度看板
+    <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 px-6 py-12">
+      <header className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+              SuperFinance
+            </span>
+            <Link
+              className="text-xs font-medium text-slate-400 transition hover:text-emerald-600 hover:underline"
+              href="/accuracy"
+            >
+              准确度看板 &rarr;
             </Link>
+          </div>
+          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
+            基金估值监控
+          </h1>
+          <p className="max-w-xl text-lg text-slate-500">
+            分钟级追踪自选基金估值、持仓收益与交易表现，由本地交易记录驱动。
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex items-center gap-3">
           <AddFundDialog onAddFund={addFund} existingCodes={watchlist.map((fund) => fund.code)} />
           <button
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2"
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 disabled:opacity-50"
             onClick={() => {
               track({
                 eventName: 'watchlist_manual_refresh_clicked',
@@ -135,19 +144,36 @@ export default function HomePage() {
               });
               void refresh();
             }}
+            disabled={isRefreshing}
           >
-            手动刷新
+            {isRefreshing ? '正在刷新' : '手动刷新'}
           </button>
         </div>
       </header>
 
       {!isAuthenticated ? (
-        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          登录后可同步自选基金和交易记录，换设备也能继续使用。
+        <div className="flex items-center gap-4 rounded-2xl border border-emerald-100 bg-emerald-50/50 p-5">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-emerald-900">启用多端同步</h3>
+            <p className="mt-0.5 text-sm text-emerald-700/80">登录后可实时同步自选基金和交易记录，确保资产数据多端一致。</p>
+          </div>
         </div>
       ) : (
-        <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          已登录账号请使用交易记录维护持仓与收益，手工持仓编辑已停用。
+        <div className="flex items-center gap-4 rounded-2xl border border-blue-100 bg-blue-50/50 p-5">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-blue-900">数据安全保护中</h3>
+            <p className="mt-0.5 text-sm text-blue-700/80">已切换至交易记录驱动模式。手工持仓编辑已停用，以确保账本可追溯性。</p>
+          </div>
         </div>
       )}
 

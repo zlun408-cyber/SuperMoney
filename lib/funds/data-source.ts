@@ -1,6 +1,12 @@
 import type { FundCode, FundQuote } from '@/lib/funds/types';
 
 export type FetchFundQuotes = (codes: FundCode[]) => Promise<FundQuote[]>;
+export const DEFAULT_FUND_ESTIMATE_TIMEOUT_MS = 10_000;
+
+export interface FetchFundEstimateOptions {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
 
 export interface FundEstimatePayload {
   fundcode: string;
@@ -12,19 +18,88 @@ export interface FundEstimatePayload {
   gztime: string;
 }
 
-export async function fetchFundQuotesFromSource(codes: FundCode[]): Promise<FundQuote[]> {
-  return await Promise.all(codes.map((code) => fetchSingleFundQuote(code)));
+export async function fetchFundQuotesFromSource(
+  codes: FundCode[],
+  options?: FetchFundEstimateOptions,
+): Promise<FundQuote[]> {
+  return await Promise.all(codes.map((code) => fetchSingleFundQuote(code, options)));
 }
 
-export async function fetchFundEstimateScript(code: string): Promise<string> {
-  const url = `https://fundgz.1234567.com.cn/js/${code}.js`;
-  const response = await fetch(url);
+const createAbortError = (message: string): Error => {
+  const error = new Error(message);
+  error.name = 'AbortError';
+  return error;
+};
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch fund estimate script: ${code}`);
+const createTimeoutSignal = (
+  code: string,
+  timeoutMs: number,
+  externalSignal?: AbortSignal,
+): { signal: AbortSignal; cleanup: () => void } => {
+  const controller = new AbortController();
+  const abort = (reason?: unknown) => {
+    if (controller.signal.aborted) {
+      return;
+    }
+
+    controller.abort(reason);
+  };
+
+  let handleExternalAbort: (() => void) | null = null;
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      abort(externalSignal.reason);
+    } else {
+      handleExternalAbort = () => abort(externalSignal.reason);
+      externalSignal.addEventListener('abort', handleExternalAbort, { once: true });
+    }
   }
 
-  return await response.text();
+  const timeoutId = globalThis.setTimeout(() => {
+    abort(createAbortError(`Fund estimate request timed out: ${code}`));
+  }, timeoutMs);
+
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      globalThis.clearTimeout(timeoutId);
+      if (externalSignal && handleExternalAbort) {
+        externalSignal.removeEventListener('abort', handleExternalAbort);
+      }
+    },
+  };
+};
+
+export async function fetchFundEstimateScript(
+  code: string,
+  options?: FetchFundEstimateOptions,
+): Promise<string> {
+  const url = `https://fundgz.1234567.com.cn/js/${code}.js`;
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_FUND_ESTIMATE_TIMEOUT_MS;
+  const { signal, cleanup } = createTimeoutSignal(code, timeoutMs, options?.signal);
+
+  try {
+    const response = await fetch(url, { signal });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch fund estimate script: ${code}`);
+    }
+
+    return await response.text();
+  } catch (error) {
+    if (signal.aborted) {
+      const reason = signal.reason;
+      if (reason instanceof Error) {
+        throw reason;
+      }
+
+      throw createAbortError(`Fund estimate request aborted: ${code}`);
+    }
+
+    throw error;
+  } finally {
+    cleanup();
+  }
 }
 
 export interface FundHistoryNavPayload {
@@ -122,8 +197,11 @@ export function mapEstimatePayloadToQuote(payload: FundEstimatePayload): FundQuo
   };
 }
 
-export async function fetchSingleFundQuote(code: string): Promise<FundQuote> {
-  const script = await fetchFundEstimateScript(code);
+export async function fetchSingleFundQuote(
+  code: string,
+  options?: FetchFundEstimateOptions,
+): Promise<FundQuote> {
+  const script = await fetchFundEstimateScript(code, options);
   const payload = extractEstimatePayload(script);
 
   return mapEstimatePayloadToQuote(payload);

@@ -109,11 +109,11 @@ const validationRecommendationClasses: Record<'review' | 'downgrade', string> = 
   downgrade: 'bg-rose-50 text-rose-700 ring-rose-200',
 };
 
-function SummaryItem({ label, value }: { label: string; value: string }) {
+function SummaryStat({ label, value, colorClass }: { label: string; value: string; colorClass?: string }) {
   return (
-    <div className="rounded-xl bg-slate-50 p-4">
-      <p className="text-sm text-slate-500">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-slate-900">{value}</p>
+    <div className="flex flex-col gap-1 rounded-2xl bg-slate-50/50 p-4 transition hover:bg-slate-50">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
+      <p className={`text-xl font-bold tracking-tight ${colorClass || 'text-slate-900'}`}>{value}</p>
     </div>
   );
 }
@@ -123,14 +123,14 @@ function SummaryGroup({
   items,
 }: {
   title: string;
-  items: Array<{ label: string; value: string }>;
+  items: Array<{ label: string; value: string; colorClass?: string }>;
 }) {
   return (
-    <div>
-      <p className="text-sm font-medium text-slate-900">{title}</p>
-      <div className="mt-3 grid gap-4 md:grid-cols-2">
+    <div className="space-y-3">
+      <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">{title}</h3>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {items.map((item) => (
-          <SummaryItem key={item.label} label={item.label} value={item.value} />
+          <SummaryStat key={item.label} label={item.label} value={item.value} colorClass={item.colorClass} />
         ))}
       </div>
     </div>
@@ -141,52 +141,55 @@ function EstimateAdjustmentPolicyPanel({ policy }: { policy: EstimateAdjustmentP
   const hasValidationRecheck = isEstimateAdjustmentPreviewLocked(policy);
 
   return (
-    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium text-slate-900">估值修正策略</p>
-          <p className="mt-1 text-sm text-slate-600">{policy.reason}</p>
+    <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/30 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className={`h-2 w-2 rounded-full animate-pulse ${policy.mode === 'active' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+          <div>
+            <p className="text-sm font-bold text-slate-900">估值修正策略</p>
+            <p className="text-xs text-slate-500">{policy.reason}</p>
+          </div>
         </div>
         <span
-          className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ring-1 ${policyModeClasses[policy.mode]}`}
+          className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ring-1 ${policyModeClasses[policy.mode]}`}
         >
           {policyModeLabels[policy.mode]}
         </span>
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-lg bg-white p-3">
-          <p className="text-sm text-slate-500">当前决策</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">
+      <div className="mt-4 grid gap-3 md:grid-cols-4">
+        <div className="rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-100">
+          <p className="text-[10px] font-bold uppercase text-slate-400">当前决策</p>
+          <p className="mt-1 text-sm font-bold text-slate-900">
             {policy.decisionStatus ? decisionLabels[policy.decisionStatus] : '未决策'}
           </p>
         </div>
-        <div className="rounded-lg bg-white p-3">
-          <p className="text-sm text-slate-500">推荐方案</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">
+        <div className="rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-100">
+          <p className="text-[10px] font-bold uppercase text-slate-400">推荐方案</p>
+          <p className="mt-1 text-sm font-bold text-slate-900">
             {policy.scenarioLabel ?? '暂无'}
           </p>
         </div>
-        <div className="rounded-lg bg-white p-3">
-          <p className="text-sm text-slate-500">修正后估值预览</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">
+        <div className="rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-100">
+          <p className="text-[10px] font-bold uppercase text-slate-400">修正估值</p>
+          <p className="mt-1 text-sm font-bold text-slate-900">
             {formatNavPreview(policy.adjustedEstimatedNav)}
           </p>
         </div>
-        <div className="rounded-lg bg-white p-3">
-          <p className="text-sm text-slate-500">模拟改善率</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">
+        <div className="rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-100">
+          <p className="text-[10px] font-bold uppercase text-slate-400">改善率</p>
+          <p className="mt-1 text-sm font-bold text-slate-900">
             {formatImprovementRate(policy.recommendedImprovementRate)}
           </p>
         </div>
       </div>
 
       {hasValidationRecheck ? (
-        <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-medium text-slate-900">回写复核中</p>
+        <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50/50 p-4">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-bold text-amber-900">回写复核中</p>
             <span
-              className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ring-1 ${
+              className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ${
                 validationRecommendationClasses[
                   policy.validationRecommendationStatus as 'review' | 'downgrade'
                 ]
@@ -195,18 +198,16 @@ function EstimateAdjustmentPolicyPanel({ policy }: { policy: EstimateAdjustmentP
               {policy.validationRecommendationLabel}
             </span>
           </div>
-          <p className="mt-2 text-sm text-slate-600">{policy.validationRecommendationReason}</p>
+          <p className="mt-1 text-xs text-amber-700">{policy.validationRecommendationReason}</p>
         </div>
       ) : null}
 
-      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-slate-600">
-        <span>诊断：{policy.diagnosis ?? '暂无'}</span>
-        <span>最近决策：{formatDecisionTime(policy.decisionUpdatedAt)}</span>
-        <span>
-          {policy.cooldownActive
-            ? `状态：失败冷却中 · ${formatCooldownHint(policy.cooldownEndsAt)}`
-            : '状态：可继续跟踪'}
-        </span>
+      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 font-mono text-[10px] text-slate-400 uppercase tracking-tighter">
+        <span>诊断: {policy.diagnosis ?? '暂无'}</span>
+        <span>更新: {formatDecisionTime(policy.decisionUpdatedAt)}</span>
+        {policy.cooldownActive && (
+           <span className="text-rose-500 font-bold">{formatCooldownHint(policy.cooldownEndsAt)}</span>
+        )}
       </div>
     </div>
   );
@@ -224,41 +225,45 @@ function EstimateAdjustmentPreviewPanel({
   onTogglePreview: () => void;
 }) {
   return (
-    <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium text-slate-900">估值修正预览</p>
-          <p className="mt-1 text-sm text-slate-600">
-            {previewEnabled ? '当前按修正估值预览持仓与收益' : '当前仍按原始估值展示持仓与收益'}
-          </p>
+    <div className="mt-6 rounded-2xl border border-emerald-100 bg-emerald-50/30 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3 text-emerald-800">
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+          </svg>
+          <div>
+            <p className="text-sm font-bold">估值修正预览</p>
+            <p className="text-xs opacity-80">
+              {previewEnabled ? '已切换至修正估值计算' : '当前展示原始实时估值'}
+            </p>
+          </div>
         </div>
         <button
-          className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm text-emerald-700"
+          className={`rounded-xl px-4 py-2 text-xs font-bold shadow-sm transition ${
+            previewEnabled
+              ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+              : 'bg-white text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-50'
+          }`}
           onClick={onTogglePreview}
           type="button"
         >
-          {previewEnabled ? '切换回原始估值' : '切换到修正估值预览'}
+          {previewEnabled ? '重置原始估值' : '启用修正预览'}
         </button>
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-3">
-        <div className="rounded-lg bg-white p-3">
-          <p className="text-sm text-slate-500">原始估值</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">
-            {formatNavPreview(rawEstimatedNav)}
-          </p>
+        <div className="rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-100">
+          <p className="text-[10px] font-bold uppercase text-slate-400">原始估值</p>
+          <p className="mt-1 text-sm font-bold text-slate-900">{formatNavPreview(rawEstimatedNav)}</p>
         </div>
-        <div className="rounded-lg bg-white p-3">
-          <p className="text-sm text-slate-500">修正估值</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">
-            {formatNavPreview(adjustedEstimatedNav)}
-          </p>
+        <div className="rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-100">
+          <p className="text-[10px] font-bold uppercase text-slate-400">修正估值</p>
+          <p className="mt-1 text-sm font-bold text-emerald-600">{formatNavPreview(adjustedEstimatedNav)}</p>
         </div>
-        <div className="rounded-lg bg-white p-3">
-          <p className="text-sm text-slate-500">估值差额</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">
-            {formatDelta(adjustedEstimatedNav - rawEstimatedNav)}
-          </p>
+        <div className="rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-100">
+          <p className="text-[10px] font-bold uppercase text-slate-400">偏离度</p>
+          <p className="mt-1 text-sm font-bold text-slate-900">{formatDelta(adjustedEstimatedNav - rawEstimatedNav)}</p>
         </div>
       </div>
     </div>
@@ -296,98 +301,137 @@ export function FundDetailCard({
     amount: fund.position?.amount,
     estimatedNav: displayEstimatedNav,
   });
+
+  const changeRate = quote?.changeRate ?? 0;
+  const changeColorClass = changeRate > 0 ? 'text-rose-600' : changeRate < 0 ? 'text-emerald-600' : 'text-slate-900';
+
   const currentCost = ledgerSummary ? ledgerSummary.currentCost : fund.position?.cost;
   const estimatedProfit = ledgerSummary ? ledgerSummary.unrealizedProfit : summary.isComputable ? summary.profit : null;
   const totalProfit = ledgerSummary
     ? ledgerSummary.realizedProfit + ledgerSummary.unrealizedProfit
     : estimatedProfit;
+
+  const profitColorClass = (totalProfit ?? 0) > 0 ? 'text-rose-600' : (totalProfit ?? 0) < 0 ? 'text-emerald-600' : 'text-slate-900';
+
   const holdingItems = ledgerSummary
     ? [
-        { label: '当前估值', value: formatNumber(displayEstimatedNav) },
+        { label: '当前实时估值', value: formatNumber(displayEstimatedNav) },
         {
-          label: '涨跌幅',
-          value: typeof quote?.changeRate === 'number' ? `${quote.changeRate.toFixed(2)}%` : '待填写',
+          label: '估值当日涨跌',
+          value: typeof quote?.changeRate === 'number' ? `${quote.changeRate > 0 ? '+' : ''}${quote.changeRate.toFixed(2)}%` : '待填写',
+          colorClass: changeColorClass,
         },
-        { label: '当前份额', value: formatNumber(ledgerSummary.currentShares) },
-        { label: '当前成本', value: formatNumber(ledgerSummary.currentCost) },
-        { label: '平均成本', value: formatAverageCost(ledgerSummary.averageCost) },
+        { label: '当前持有份额', value: formatNumber(ledgerSummary.currentShares) },
+        { label: '平均持有成本', value: formatAverageCost(ledgerSummary.averageCost) },
       ]
     : [
-        { label: '当前估值', value: formatNumber(displayEstimatedNav) },
+        { label: '当前实时估值', value: formatNumber(displayEstimatedNav) },
         {
-          label: '涨跌幅',
-          value: typeof quote?.changeRate === 'number' ? `${quote.changeRate.toFixed(2)}%` : '待填写',
+          label: '估值当日涨跌',
+          value: typeof quote?.changeRate === 'number' ? `${quote.changeRate > 0 ? '+' : ''}${quote.changeRate.toFixed(2)}%` : '待填写',
+          colorClass: changeColorClass,
         },
-        { label: '持仓成本', value: formatNumber(currentCost) },
-        { label: '估算盈亏', value: formatNumber(estimatedProfit) },
+        { label: '手工持仓成本', value: formatNumber(currentCost) },
+        { label: '估算浮动盈亏', value: formatNumber(estimatedProfit), colorClass: (estimatedProfit ?? 0) > 0 ? 'text-rose-600' : 'text-emerald-600' },
       ];
   const profitItems = ledgerSummary
     ? [
-        { label: '未实现收益', value: formatNumber(ledgerSummary.unrealizedProfit) },
-        { label: '已实现收益', value: formatNumber(ledgerSummary.realizedProfit) },
-        { label: '累计分红', value: formatNumber(ledgerSummary.totalDividends) },
-        { label: '总收益', value: formatNumber(totalProfit) },
+        { label: '未实现收益', value: formatNumber(ledgerSummary.unrealizedProfit), colorClass: (ledgerSummary.unrealizedProfit ?? 0) > 0 ? 'text-rose-600' : 'text-emerald-600' },
+        { label: '已实现收益', value: formatNumber(ledgerSummary.realizedProfit), colorClass: (ledgerSummary.realizedProfit ?? 0) > 0 ? 'text-rose-600' : 'text-emerald-600' },
+        { label: '累计分红金额', value: formatNumber(ledgerSummary.totalDividends), colorClass: 'text-sky-600' },
+        { label: '累计总盈亏', value: formatNumber(totalProfit), colorClass: profitColorClass },
       ]
     : [];
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">{fund.name}</h1>
-          <p className="mt-2 text-sm text-slate-600">基金代码：{fund.code}</p>
-        </div>
-        <a className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700" href="/">
-          返回首页
-        </a>
-      </div>
+    <div className="flex flex-col gap-6">
+      <section className="rounded-3xl border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200/50">
+        <header className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs font-bold tracking-tighter text-slate-400">
+                {fund.code}
+              </span>
+              <span className="h-1 w-1 rounded-full bg-slate-300" />
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
+                基金详情工作台
+              </p>
+            </div>
+            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">{fund.name}</h1>
+          </div>
+          <a
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 hover:text-slate-900 shadow-sm"
+            href="/"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            返回首页
+          </a>
+        </header>
 
-      <div className="mt-6 space-y-6">
-        {ledgerSummary ? (
-          <>
-            <SummaryGroup items={holdingItems} title="持仓概览" />
-            <SummaryGroup items={profitItems} title="收益拆分" />
-          </>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {holdingItems.map((item) => (
-              <SummaryItem key={item.label} label={item.label} value={item.value} />
-            ))}
+        <div className="mt-8 space-y-8">
+          {ledgerSummary ? (
+            <>
+              <SummaryGroup items={holdingItems} title="资产持仓概览" />
+              <SummaryGroup items={profitItems} title="收益账本拆分" />
+            </>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {holdingItems.map((item) => (
+                <SummaryStat
+                  key={item.label}
+                  label={item.label}
+                  value={item.value}
+                  colorClass={item.colorClass}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {ledgerSummary && (
+          <div className="mt-6 rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-100">
+            <div className="flex gap-3">
+              <svg className="h-5 w-5 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-xs leading-relaxed text-slate-500">
+                <strong>账本提示：</strong>累计总盈亏已整合已实现与未实现部分。
+                分红金额已按发放方式自动计入相应收益分类，以便您清晰追踪资产全生命周期表现。
+              </p>
+            </div>
           </div>
         )}
-      </div>
 
-      {ledgerSummary ? (
-        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <p className="text-sm font-medium text-slate-900">账本说明</p>
-          <ul className="mt-2 space-y-1 text-sm text-slate-600">
-            <li>总收益 = 已实现收益 + 未实现收益</li>
-            <li>累计分红已计入已实现收益，这里单独展示，方便你看清收益来源。</li>
-          </ul>
+        <div className="mt-8 overflow-hidden rounded-2xl ring-1 ring-slate-100">
+          <FundIntradayChart points={intradayPoints} trustSignal={intradayTrustSignal} />
         </div>
-      ) : null}
 
-      <FundIntradayChart points={intradayPoints} trustSignal={intradayTrustSignal} />
+        <div className="mt-6 grid gap-6 xl:grid-cols-2">
+          {estimateAccuracySummary && (
+            <EstimateConfidencePanel
+              summary={estimateAccuracySummary}
+              confidenceLevel={estimateConfidenceLevel}
+            />
+          )}
 
-      {estimateAccuracySummary ? (
-        <EstimateConfidencePanel
-          summary={estimateAccuracySummary}
-          confidenceLevel={estimateConfidenceLevel}
-        />
-      ) : null}
+          {quote?.adjustmentPolicy && (
+            <div className="h-full">
+               <EstimateAdjustmentPolicyPanel policy={quote.adjustmentPolicy} />
+            </div>
+          )}
+        </div>
 
-      {quote?.adjustmentPolicy ? (
-        <EstimateAdjustmentPolicyPanel policy={quote.adjustmentPolicy} />
-      ) : null}
-
-      {canAdjustedEstimatePreview && typeof quote?.estimatedNav === 'number' ? (
-        <EstimateAdjustmentPreviewPanel
-          rawEstimatedNav={quote.estimatedNav}
-          adjustedEstimatedNav={quote.adjustedEstimatedNav ?? quote.estimatedNav}
-          previewEnabled={isAdjustedPreviewEnabled}
-          onTogglePreview={() => setIsAdjustedPreviewEnabled((current) => !current)}
-        />
-      ) : null}
-    </section>
+        {canAdjustedEstimatePreview && typeof quote?.estimatedNav === 'number' && (
+          <EstimateAdjustmentPreviewPanel
+            rawEstimatedNav={quote.estimatedNav}
+            adjustedEstimatedNav={quote.adjustedEstimatedNav ?? quote.estimatedNav}
+            previewEnabled={isAdjustedPreviewEnabled}
+            onTogglePreview={() => setIsAdjustedPreviewEnabled((current) => !current)}
+          />
+        )}
+      </section>
+    </div>
   );
 }

@@ -3,6 +3,13 @@ import type {
   EstimateAdjustmentDecisionItem,
 } from '@/lib/funds/types';
 import {
+  applyAccuracyImport,
+  dryRunAccuracyImport,
+  mergeEstimateAdjustmentDecisions,
+  type AccuracyImportApplyResult,
+  type AccuracyImportDryRunResult,
+} from '@/lib/accuracy/import';
+import {
   loadEstimateAccuracySnapshots,
   saveEstimateAccuracySnapshots,
   upsertEstimateAccuracySnapshots,
@@ -26,6 +33,8 @@ export interface AccuracyStore {
   ): EstimateAccuracySnapshot[];
   loadAdjustmentDecisions(): Record<string, EstimateAdjustmentDecisionItem>;
   saveAdjustmentDecisions(decisions: Record<string, EstimateAdjustmentDecisionItem>): void;
+  dryRunImport(payload: unknown): AccuracyImportDryRunResult;
+  applyImport(payload: unknown): AccuracyImportApplyResult;
 }
 
 interface LocalAccuracyStoreOptions {
@@ -41,62 +50,6 @@ interface AuthenticatedAccuracyStoreOptions extends LocalAccuracyStoreOptions {
   loadCloudAccuracy?: typeof defaultLoadCloudAccuracy;
   saveCloudAccuracy?: typeof defaultSaveCloudAccuracy;
 }
-
-const mergeAdjustmentDecisionHistories = (
-  left: EstimateAdjustmentDecisionItem['history'],
-  right: EstimateAdjustmentDecisionItem['history'],
-): EstimateAdjustmentDecisionItem['history'] => {
-  const byKey = new Map<string, EstimateAdjustmentDecisionItem['history'][number]>();
-
-  for (const item of [...left, ...right]) {
-    byKey.set(`${item.status}::${item.updatedAt}`, item);
-  }
-
-  return Array.from(byKey.values()).sort((a, b) => Date.parse(a.updatedAt) - Date.parse(b.updatedAt));
-};
-
-export const mergeEstimateAdjustmentDecisions = (
-  local: Record<string, EstimateAdjustmentDecisionItem>,
-  cloud: Record<string, EstimateAdjustmentDecisionItem>,
-): Record<string, EstimateAdjustmentDecisionItem> => {
-  const fundCodes = new Set([...Object.keys(local), ...Object.keys(cloud)]);
-
-  return Array.from(fundCodes).reduce<Record<string, EstimateAdjustmentDecisionItem>>(
-    (accumulator, fundCode) => {
-      const localDecision = local[fundCode];
-      const cloudDecision = cloud[fundCode];
-
-      if (!localDecision) {
-        if (cloudDecision) {
-          accumulator[fundCode] = cloudDecision;
-        }
-        return accumulator;
-      }
-
-      if (!cloudDecision) {
-        accumulator[fundCode] = localDecision;
-        return accumulator;
-      }
-
-      const mergedHistory = mergeAdjustmentDecisionHistories(
-        localDecision.history,
-        cloudDecision.history,
-      );
-      const localUpdatedAt = Date.parse(localDecision.updatedAt);
-      const cloudUpdatedAt = Date.parse(cloudDecision.updatedAt);
-      const current = cloudUpdatedAt >= localUpdatedAt ? cloudDecision : localDecision;
-
-      accumulator[fundCode] = {
-        status: current.status,
-        updatedAt: current.updatedAt,
-        history: mergedHistory,
-      };
-
-      return accumulator;
-    },
-    {},
-  );
-};
 
 export function createLocalAccuracyStore(options: LocalAccuracyStoreOptions = {}): AccuracyStore {
   const loadSnapshotsImpl = options.loadSnapshots ?? loadEstimateAccuracySnapshots;
@@ -125,6 +78,23 @@ export function createLocalAccuracyStore(options: LocalAccuracyStoreOptions = {}
     saveAdjustmentDecisions(decisions) {
       saveDecisionsImpl(decisions);
     },
+    dryRunImport(payload) {
+      return dryRunAccuracyImport({
+        payload,
+        currentSnapshots: loadSnapshotsImpl(),
+        currentDecisions: loadDecisionsImpl(),
+      });
+    },
+    applyImport(payload) {
+      const result = applyAccuracyImport({
+        payload,
+        currentSnapshots: loadSnapshotsImpl(),
+        currentDecisions: loadDecisionsImpl(),
+      });
+      saveSnapshotsImpl(result.nextSnapshots);
+      saveDecisionsImpl(result.nextDecisions);
+      return result;
+    },
   };
 }
 
@@ -139,6 +109,8 @@ export function createAuthenticatedAccuracyStore(
     void saveCloudAccuracyImpl(options.cloudClient, options.userId, {
       snapshots: localStore.loadSnapshots(),
       decisions: localStore.loadAdjustmentDecisions(),
+    }).catch(() => {
+      // Preserve local state when cloud retention is temporarily unavailable.
     });
   };
 
@@ -146,17 +118,27 @@ export function createAuthenticatedAccuracyStore(
     async initialize() {
       const localSnapshots = localStore.loadSnapshots();
       const localDecisions = localStore.loadAdjustmentDecisions();
-      const cloudData = await loadCloudAccuracyImpl(options.cloudClient, options.userId);
-      const mergedSnapshots = upsertEstimateAccuracySnapshots(localSnapshots, cloudData.snapshots);
-      const mergedDecisions = mergeEstimateAdjustmentDecisions(localDecisions, cloudData.decisions);
 
-      localStore.saveSnapshots(mergedSnapshots);
-      localStore.saveAdjustmentDecisions(mergedDecisions);
+      try {
+        const cloudData = await loadCloudAccuracyImpl(options.cloudClient, options.userId);
+        const mergedSnapshots = upsertEstimateAccuracySnapshots(localSnapshots, cloudData.snapshots);
+        const mergedDecisions = mergeEstimateAdjustmentDecisions(localDecisions, cloudData.decisions);
 
-      await saveCloudAccuracyImpl(options.cloudClient, options.userId, {
-        snapshots: mergedSnapshots,
-        decisions: mergedDecisions,
-      });
+        localStore.saveSnapshots(mergedSnapshots);
+        localStore.saveAdjustmentDecisions(mergedDecisions);
+
+        try {
+          await saveCloudAccuracyImpl(options.cloudClient, options.userId, {
+            snapshots: mergedSnapshots,
+            decisions: mergedDecisions,
+          });
+        } catch {
+          // Keep merged local state even if cloud persistence fails.
+        }
+      } catch {
+        localStore.saveSnapshots(localSnapshots);
+        localStore.saveAdjustmentDecisions(localDecisions);
+      }
     },
     loadSnapshots() {
       return localStore.loadSnapshots();
@@ -176,6 +158,14 @@ export function createAuthenticatedAccuracyStore(
     saveAdjustmentDecisions(decisions) {
       localStore.saveAdjustmentDecisions(decisions);
       mirrorToCloud();
+    },
+    dryRunImport(payload) {
+      return localStore.dryRunImport(payload);
+    },
+    applyImport(payload) {
+      const result = localStore.applyImport(payload);
+      mirrorToCloud();
+      return result;
     },
   };
 }

@@ -188,6 +188,7 @@ export interface EstimateAccuracySummary {
   resolvedTradingDayCount: number;
   highErrorResolvedSampleCount: number;
   averageAbsoluteErrorRate: number | null;
+  averageSignedErrorRate: number | null;
   latestQuoteUpdatedAt: string | null;
   latestResolvedAt: string | null;
 }

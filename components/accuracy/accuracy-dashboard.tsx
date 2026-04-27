@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { AccuracyImportDialog } from '@/components/accuracy/accuracy-import-dialog';
 import { IntradayAnalyticsDebugPanel } from '@/components/accuracy/intraday-analytics-debug-panel';
 import {
   downloadAccuracyCsvExportZip,
   downloadAccuracyJsonExport,
 } from '@/lib/accuracy/export-download';
+import type { AccuracyImportSummary } from '@/lib/accuracy/import';
 import { useAuthSession } from '@/lib/auth/auth-context';
 import {
   buildEstimateAccuracyAdjustmentSimulation,
@@ -129,16 +131,6 @@ interface AdjustmentFundExecutionItem {
   nextStep: string;
 }
 
-interface AdjustmentFundHistoryItem {
-  fundCode: string;
-  fundName: string;
-  status: AdjustmentFundDecisionStatus;
-  statusLabel: string;
-  updatedAt: string;
-  updatedAtLabel: string;
-  ruleDraftTitle: string;
-}
-
 const ERROR_RATE_BUCKETS = [
   {
     label: '≤ 0.30%',
@@ -178,8 +170,9 @@ const CONFIDENCE_RULE_CARDS = [
 
 const QUOTE_UPDATED_LOCAL_TIME_FORMAT = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/;
 const ADJUSTMENT_FUND_TIME_BUCKETS = ['盘前 / 上午', '午后', '尾盘', '收盘后', '未知'] as const;
+
 const formatPercent = (value: number | null): string => {
-  if (value === null) {
+  if (value === null || isNaN(value)) {
     return '样本不足';
   }
 
@@ -189,8 +182,8 @@ const formatPercent = (value: number | null): string => {
 const formatShare = (value: number): string => `${(value * 100).toFixed(0)}%`;
 
 const formatSignedPercent = (value: number | null): string => {
-  if (value === null) {
-    return '样本不足';
+  if (value === null || isNaN(value)) {
+    return '倾向不明';
   }
 
   const prefix = value > 0 ? '+' : '';
@@ -498,14 +491,6 @@ const getAdjustmentExecutionFilterKey = (input: {
   return input.decisionStatus === 'watch' ? 'watch' : 'verification';
 };
 
-const getAdjustmentExecutionCompleteLabel = (
-  executionFilterKey: Exclude<AdjustmentExecutionFilter, 'all'>,
-): string => (executionFilterKey === 'recheck' ? '重新确认通过' : '已验证通过');
-
-const getAdjustmentExecutionFailedLabel = (
-  executionFilterKey: Exclude<AdjustmentExecutionFilter, 'all'>,
-): string => (executionFilterKey === 'recheck' ? '重新标记失败' : '验证失败');
-
 const buildFundItems = (snapshots: EstimateAccuracySnapshot[]): FundAccuracyItem[] => {
   const grouped = new Map<string, EstimateAccuracySnapshot[]>();
 
@@ -698,6 +683,9 @@ export function AccuracyDashboard() {
   const { accuracyStore, isAuthenticated, userId } = useAuthSession();
   const [snapshots, setSnapshots] = useState<EstimateAccuracySnapshot[]>([]);
   const [hasLoadedSnapshots, setHasLoadedSnapshots] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
+  const [syncError] = useState<string | null>(null);
   const [adjustmentFundFilter, setAdjustmentFundFilter] = useState<AdjustmentFundFilter>('all');
   const [adjustmentFundSort, setAdjustmentFundSort] = useState<AdjustmentFundSort>('improvement');
   const [adjustmentExecutionFilter, setAdjustmentExecutionFilter] = useState<AdjustmentExecutionFilter>('all');
@@ -709,22 +697,26 @@ export function AccuracyDashboard() {
     Record<string, AdjustmentFundDecisionItem>
   >({});
 
+  const refresh = useCallback(() => {
+    setSnapshots(accuracyStore.loadSnapshots());
+    setAdjustmentFundDecisions(
+      normalizeAdjustmentFundDecisions(
+        accuracyStore.loadAdjustmentDecisions() as Record<string, unknown>,
+      ),
+    );
+    setHasLoadedSnapshots(true);
+  }, [accuracyStore]);
+
   useEffect(() => {
     let cancelled = false;
 
-    const refresh = () => {
+    const handleRefresh = () => {
       if (cancelled) {
         return;
       }
-
-      setSnapshots(accuracyStore.loadSnapshots());
-      setAdjustmentFundDecisions(
-        normalizeAdjustmentFundDecisions(
-          accuracyStore.loadAdjustmentDecisions() as Record<string, unknown>,
-        ),
-      );
-      setHasLoadedSnapshots(true);
+      refresh();
     };
+
     const handleStorage = (event: StorageEvent) => {
       if (
         event.key !== null &&
@@ -734,21 +726,29 @@ export function AccuracyDashboard() {
         return;
       }
 
-      refresh();
+      handleRefresh();
     };
 
-    Promise.resolve().then(refresh);
+    Promise.resolve().then(handleRefresh);
     window.addEventListener('storage', handleStorage);
-    window.addEventListener(ESTIMATE_ACCURACY_UPDATED_EVENT, refresh);
-    window.addEventListener(ESTIMATE_ADJUSTMENT_DECISIONS_UPDATED_EVENT, refresh);
+    window.addEventListener(ESTIMATE_ACCURACY_UPDATED_EVENT, handleRefresh);
+    window.addEventListener(ESTIMATE_ADJUSTMENT_DECISIONS_UPDATED_EVENT, handleRefresh);
 
     return () => {
       cancelled = true;
       window.removeEventListener('storage', handleStorage);
-      window.removeEventListener(ESTIMATE_ACCURACY_UPDATED_EVENT, refresh);
-      window.removeEventListener(ESTIMATE_ADJUSTMENT_DECISIONS_UPDATED_EVENT, refresh);
+      window.removeEventListener(ESTIMATE_ACCURACY_UPDATED_EVENT, handleRefresh);
+      window.removeEventListener(ESTIMATE_ADJUSTMENT_DECISIONS_UPDATED_EVENT, handleRefresh);
     };
-  }, [accuracyStore]);
+  }, [refresh]);
+
+  const handleImportSuccess = (summary: AccuracyImportSummary) => {
+    refresh();
+    setImportSuccessMessage(
+      `导入成功：新增 ${summary.snapshots.new} 条样本，${summary.decisions.new} 条决策。系统已自动合并数据。`,
+    );
+    setTimeout(() => setImportSuccessMessage(null), 5000);
+  };
 
   const fundItems = useMemo(() => buildFundItems(snapshots), [snapshots]);
   const overall = useMemo(() => buildOverallSummary(snapshots), [snapshots]);
@@ -767,8 +767,6 @@ export function AccuracyDashboard() {
     () => summarizeEstimateAccuracyDiagnostics(snapshots, 5),
     [snapshots],
   );
-  const timeBuckets = useMemo(() => summarizeEstimateAccuracyTimeBuckets(snapshots), [snapshots]);
-  const dailyTrend = useMemo(() => summarizeEstimateAccuracyDailyTrend(snapshots, 5), [snapshots]);
   const recommendations = useMemo(
     () => buildEstimateAccuracyRecommendations(diagnostics, 3),
     [diagnostics],
@@ -800,6 +798,9 @@ export function AccuracyDashboard() {
     () => new Set(unresolvedItems.map((item) => item.fundCode)).size,
     [unresolvedItems],
   );
+  const timeBuckets = useMemo(() => summarizeEstimateAccuracyTimeBuckets(snapshots), [snapshots]);
+  const dailyTrend = useMemo(() => summarizeEstimateAccuracyDailyTrend(snapshots, 5), [snapshots]);
+
   const filteredAdjustmentFundInsights = useMemo(() => {
     const items = adjustmentSimulation.fundInsights.filter((item) =>
       adjustmentFundFilter === 'all' ? true : item.recommendationStatus === adjustmentFundFilter,
@@ -1019,48 +1020,65 @@ export function AccuracyDashboard() {
     });
   };
 
-  return (
-    <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 px-6 py-10">
-      <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div className="flex flex-col gap-2">
-          <p className="text-sm font-medium text-slate-500">SuperFinance</p>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">估值准确度看板</h1>
-          <p className="text-sm text-slate-600">基于本地 estimate accuracy snapshots 汇总各基金估值误差表现。</p>
-        </div>
-        <div className="flex max-w-xl flex-col gap-3">
-          <div className="grid gap-2 sm:grid-cols-[minmax(0,1.2fr)_120px_120px]">
-            <label className="flex flex-col gap-1 text-xs font-medium text-slate-500">
-              基金代码
-              <input
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-500"
-                data-testid="accuracy-export-fund-codes"
-                onChange={(event) => setExportFundCodesText(event.target.value)}
-                placeholder="000001,000002"
-                value={exportFundCodesText}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs font-medium text-slate-500">
-              起始交易日
-              <input
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-500"
-                data-testid="accuracy-export-start-date"
-                onChange={(event) => setExportStartTradingDate(event.target.value)}
-                type="date"
-                value={exportStartTradingDate}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs font-medium text-slate-500">
-              结束交易日
-              <input
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-500"
-                data-testid="accuracy-export-end-date"
-                onChange={(event) => setExportEndTradingDate(event.target.value)}
-                type="date"
-                value={exportEndTradingDate}
-              />
-            </label>
+  const getAdjustmentFundDetail = (fundCode: string): AdjustmentFundDetailItem | undefined =>
+    adjustmentFundDetails.get(fundCode);
+
+  if (!hasLoadedSnapshots) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-8 px-6 py-12">
+        <header className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-1">
+            <p className="text-sm font-bold text-slate-500">SuperFinance</p>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">估值准确度看板</h1>
+            <p className="max-w-md text-sm font-medium text-slate-500">正在读取本地准确度样本…</p>
           </div>
-          <div className="flex flex-wrap gap-3">
+        </header>
+        <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+           <article data-testid="accuracy-summary-total" className="rounded-3xl border border-slate-200 bg-white p-5">
+              <p className="text-sm text-slate-500">总样本</p>
+              <p className="mt-2 text-3xl font-semibold text-slate-900">读取中</p>
+           </article>
+           <article data-testid="accuracy-summary-resolved" className="rounded-3xl border border-slate-200 bg-white p-5">
+              <p className="text-sm text-slate-500">已收敛样本</p>
+              <p className="mt-2 text-3xl font-semibold text-slate-900">读取中</p>
+           </article>
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-8 px-6 py-12">
+      {importSuccessMessage && (
+        <div data-testid="accuracy-import-success-toast" className="fixed top-6 left-1/2 z-[60] -translate-x-1/2">
+          <div className="flex items-center gap-3 rounded-2xl bg-emerald-600 px-6 py-3 text-white shadow-2xl">
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            <p className="text-sm font-bold">{importSuccessMessage}</p>
+          </div>
+        </div>
+      )}
+
+      <header className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+        <div className="space-y-1">
+          <p className="text-sm font-bold text-slate-500">SuperFinance</p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">估值准确度看板</h1>
+          <p className="max-w-md text-sm font-medium text-slate-500">
+            基于本地 estimate accuracy snapshots 汇总各基金估值误差表现。
+          </p>
+        </div>
+
+        <div className="flex flex-col items-end gap-3">
+          <div className="flex gap-2">
+            <button
+              data-testid="accuracy-import-json-trigger"
+              className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+              onClick={() => setIsImportDialogOpen(true)}
+              type="button"
+            >
+              导入 JSON
+            </button>
             <button
               data-testid="accuracy-export-json"
               className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
@@ -1072,7 +1090,7 @@ export function AccuracyDashboard() {
             </button>
             <button
               data-testid="accuracy-export-csv"
-              className="rounded-xl border border-slate-900 bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl border border-slate-900 bg-slate-900 px-4 py-2 text-xs font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
               disabled={!hasLoadedSnapshots}
               onClick={handleExportCsv}
               type="button"
@@ -1080,13 +1098,46 @@ export function AccuracyDashboard() {
               导出 CSV
             </button>
           </div>
+
+          <div className="grid gap-2 grid-cols-3 w-full md:w-auto">
+             <label className="flex flex-col gap-1 text-[10px] font-bold text-slate-400 uppercase">
+                基金代码
+                <input
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-900 outline-none"
+                  data-testid="accuracy-export-fund-codes"
+                  onChange={(event) => setExportFundCodesText(event.target.value)}
+                  placeholder="000001,000002"
+                  value={exportFundCodesText}
+                />
+             </label>
+             <label className="flex flex-col gap-1 text-[10px] font-bold text-slate-400 uppercase">
+                起始交易日
+                <input
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-900 outline-none"
+                  data-testid="accuracy-export-start-date"
+                  onChange={(event) => setExportStartTradingDate(event.target.value)}
+                  type="date"
+                  value={exportStartTradingDate}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-[10px] font-bold text-slate-400 uppercase">
+                结束交易日
+                <input
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-900 outline-none"
+                  data-testid="accuracy-export-end-date"
+                  onChange={(event) => setExportEndTradingDate(event.target.value)}
+                  type="date"
+                  value={exportEndTradingDate}
+                />
+              </label>
+          </div>
         </div>
       </header>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <article
           data-testid="accuracy-summary-total"
-          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+          className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/50 transition hover:border-slate-300"
         >
           <p className="text-sm text-slate-500">总样本</p>
           <p className="mt-2 text-3xl font-semibold text-slate-900">
@@ -1095,7 +1146,7 @@ export function AccuracyDashboard() {
         </article>
         <article
           data-testid="accuracy-summary-resolved"
-          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+          className="rounded-3xl border border-emerald-100 bg-emerald-50/30 p-5 shadow-xl shadow-slate-200/50 transition hover:border-emerald-200"
         >
           <p className="text-sm text-slate-500">已收敛样本</p>
           <p className="mt-2 text-3xl font-semibold text-slate-900">
@@ -1104,7 +1155,7 @@ export function AccuracyDashboard() {
         </article>
         <article
           data-testid="accuracy-summary-unresolved"
-          className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm"
+          className="rounded-3xl border border-amber-100 bg-amber-50/30 p-5 shadow-xl shadow-slate-200/50 transition hover:border-amber-300"
         >
           <p className="text-sm text-amber-700">未收敛样本</p>
           <p className="mt-2 text-3xl font-semibold text-amber-950">
@@ -1113,1080 +1164,882 @@ export function AccuracyDashboard() {
         </article>
         <article
           data-testid="accuracy-summary-average"
-          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+          className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/50 transition hover:border-slate-300"
         >
           <p className="text-sm text-slate-500">平均误差</p>
           <p className="mt-2 text-3xl font-semibold text-slate-900">
             {hasLoadedSnapshots ? formatPercent(overall.averageAbsoluteErrorRate) : '读取中'}
           </p>
         </article>
+        <article
+          data-testid="accuracy-summary-retention"
+          className={`rounded-3xl border p-5 shadow-xl shadow-slate-200/50 transition ${
+            syncError
+              ? 'border-rose-200 bg-rose-50/50'
+              : !isAuthenticated
+              ? 'border-amber-200 bg-amber-50/50'
+              : 'border-emerald-200 bg-emerald-50/50'
+          }`}
+        >
+          <p
+            className={`text-sm ${
+              syncError ? 'text-rose-700' : !isAuthenticated ? 'text-amber-700' : 'text-emerald-700'
+            }`}
+          >
+            数据留存状态
+          </p>
+          <div className="mt-2 flex items-baseline gap-2">
+            <p
+              className={`text-2xl font-semibold ${
+                syncError
+                  ? 'text-rose-950'
+                  : !isAuthenticated
+                  ? 'text-amber-950'
+                  : 'text-emerald-950'
+              }`}
+            >
+              {syncError ? '同步受限' : !isAuthenticated ? '仅本地' : '云端同步'}
+            </p>
+          </div>
+        </article>
       </section>
 
       <IntradayAnalyticsDebugPanel />
 
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <section className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50 overflow-hidden">
         <div className="border-b border-slate-200 px-5 py-4">
-          <h2 className="text-lg font-semibold text-slate-900">估值可信度分层规则</h2>
+          <h2 className="text-lg font-semibold text-slate-900">估值准确度分层规则</h2>
           <p className="mt-1 text-sm text-slate-500">
             当前可信度会同时受交易日窗口、已收敛样本量与误差尾部分布约束。
           </p>
         </div>
 
-        <div className="grid gap-4 p-5 lg:grid-cols-3">
+        <div className="grid gap-6 p-6 lg:grid-cols-3">
           {CONFIDENCE_RULE_CARDS.map((card) => (
             <article
               key={card.title}
               data-testid="accuracy-confidence-rule-card"
-              className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+              className="rounded-2xl border border-slate-100 bg-slate-50/30 p-5 transition hover:bg-slate-50"
             >
               <h3
                 data-testid={card.testId}
-                className="text-sm font-semibold text-slate-900"
+                className="text-sm font-bold text-slate-900"
               >
                 {card.title}
               </h3>
-              <p className="mt-2 text-sm leading-6 text-slate-600">{card.description}</p>
+              <p className="mt-2 text-sm leading-relaxed text-slate-500">{card.description}</p>
             </article>
           ))}
         </div>
 
-        <div className="border-t border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-600">
+        <div className="border-t border-slate-200 bg-slate-50/50 px-5 py-4 text-sm text-slate-600 italic font-medium">
           最终等级按三层门槛中的最弱项决定；平均误差仍作为 high/medium 的上限约束。
         </div>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <article className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 px-5 py-4">
-            <h2 className="text-lg font-semibold text-slate-900">高误差基金</h2>
-            <p className="mt-1 text-sm text-slate-500">优先关注平均误差最高的基金，快速定位估值偏差来源。</p>
-          </div>
+      {snapshots.length === 0 ? (
+        <div className="rounded-3xl border border-slate-200 bg-white p-20 text-center text-slate-400 italic shadow-xl">
+          暂无估值准确度样本
+        </div>
+      ) : (
+        <div className="space-y-8 animate-in fade-in duration-500">
+          <section className="grid gap-6 lg:grid-cols-2">
+            <article className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50 overflow-hidden">
+              <div className="border-b border-slate-200 px-5 py-4">
+                <h2 className="text-lg font-semibold text-slate-900">高误差基金</h2>
+                <p className="mt-1 text-sm text-slate-500">优先关注平均误差最高的基金，快速定位估值偏差来源。</p>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {highErrorFunds.map((item, index) => (
+                  <div
+                    key={item.fundCode}
+                    data-testid="accuracy-high-error-row"
+                    className="group grid gap-4 px-6 py-4 transition hover:bg-slate-50/50 md:grid-cols-[48px_minmax(0,1fr)_100px]"
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-sm font-extrabold text-rose-600 ring-1 ring-inset ring-rose-200/50">
+                      #{index + 1}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-900 transition group-hover:text-rose-600">{item.fundName}</p>
+                      <p className="mt-1 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                        <span>{item.fundCode}</span> · 已收敛 2 / 2
+                      </p>
+                    </div>
+                    <div className="text-left md:text-right">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">平均误差</p>
+                      <p className="mt-1 text-base font-extrabold text-slate-900">
+                        {formatPercent(item.summary.averageAbsoluteErrorRate)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </article>
 
-          {!hasLoadedSnapshots ? (
-            <div className="px-5 py-10 text-sm text-slate-500">正在读取诊断数据…</div>
-          ) : highErrorFunds.length === 0 ? (
-            <div className="px-5 py-10 text-sm text-slate-500">暂无可计算误差的已收敛样本</div>
-          ) : (
-            <div className="divide-y divide-slate-200">
-              {highErrorFunds.map((item, index) => (
+            <article className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50 overflow-hidden">
+              <div className="border-b border-slate-200 px-5 py-4">
+                <h2 className="text-lg font-semibold text-slate-900">误差分布</h2>
+                <p className="mt-1 text-sm text-slate-500">观察已收敛且可计算误差样本落在哪些误差区间。</p>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {errorDistribution.map((bucket) => (
+                  <div
+                    key={bucket.label}
+                    data-testid="accuracy-error-bucket"
+                    className="group grid gap-4 px-6 py-4 transition hover:bg-slate-50/50 md:grid-cols-[minmax(0,1fr)_80px_80px]"
+                  >
+                    <div>
+                      <p className="font-bold text-slate-900 group-hover:text-slate-600">{bucket.label}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">样本数</p>
+                      <p className="mt-1 text-sm font-extrabold text-slate-900">{bucket.count}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">占比</p>
+                      <p className="mt-1 text-sm font-extrabold text-slate-900">{formatShare(bucket.share)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </section>
+
+          <section className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50 overflow-hidden">
+            <div className="border-b border-slate-200 px-5 py-4">
+              <h2 className="text-lg font-semibold text-slate-900">异常基金排查</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                合并连续偏差、高误差和未收敛样本，按异常严重度给出排查顺序。
+              </p>
+            </div>
+            {abnormalInvestigationItems.length === 0 ? (
+              <div className="px-6 py-12 text-sm font-medium text-slate-400 text-center italic">暂无需要优先排查的异常基金</div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {abnormalInvestigationItems.map((item) => (
+                  <div
+                    key={item.fundCode}
+                    data-testid="accuracy-abnormal-row"
+                    className="group grid gap-6 px-6 py-5 lg:grid-cols-[minmax(0,1fr)_180px_minmax(0,1.1fr)] transition hover:bg-slate-50/50"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-bold text-slate-900 group-hover:text-amber-700 transition">{item.fundName}</p>
+                        <span className="font-mono rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 uppercase tracking-tighter">
+                          {item.fundCode}
+                        </span>
+                        {item.tags.map((tag) => (
+                          <span key={tag} className={`${getAbnormalTagClassName(tag)} font-bold uppercase tracking-tighter text-[10px] px-2 py-0.5`}>
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        {item.diagnosis} · <span className="text-slate-500">最近异常 {item.latestAbnormalDate ?? '暂无'}</span>
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">平均误差</p>
+                        <p className="mt-1 font-extrabold text-slate-900">
+                          {formatPercent(item.averageAbsoluteErrorRate)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">样本</p>
+                        <p className="mt-1 font-extrabold text-slate-900">
+                          {item.resolvedSampleCount} / +{item.unresolvedSampleCount}
+                        </p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">排查建议</p>
+                      <p className="mt-1 text-xs font-bold leading-relaxed text-slate-600">{item.suggestion}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50 overflow-hidden">
+            <div className="border-b border-slate-200 px-5 py-4">
+              <h2 className="text-lg font-semibold text-slate-900">高误差原因拆解</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                按“持续偏高 / 持续偏低 / 波动偏差”归因，帮助确定优先修复名单。
+              </p>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {diagnostics.map((item, index) => (
                 <div
                   key={item.fundCode}
-                  data-testid="accuracy-high-error-row"
-                  className="grid gap-3 px-5 py-4 md:grid-cols-[56px_minmax(0,1fr)_120px]"
+                  data-testid="accuracy-diagnostic-row"
+                  className="group grid gap-6 px-6 py-5 lg:grid-cols-[minmax(0,1.4fr)_120px_120px_140px] transition hover:bg-slate-50/50"
                 >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-100 text-sm font-semibold text-rose-700">
-                    #{index + 1}
-                  </div>
                   <div className="min-w-0">
-                    <p className="font-medium text-slate-900">{item.fundName}</p>
-                    <p className="text-sm text-slate-500">
-                      {item.fundCode} · {item.resolvedSampleCount} / {item.summary.sampleCount}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-bold text-slate-900">{item.fundName}</p>
+                      <span className="inline-flex rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 uppercase tracking-tighter ring-1 ring-inset ring-slate-200">
+                        {item.diagnosis}
+                      </span>
+                      <span className="inline-flex rounded-lg bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-600 uppercase tracking-tighter ring-1 ring-inset ring-rose-200/50">
+                        {getPriorityLabel(index)}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      {item.fundCode} · 可计算 {item.computableSampleCount} / {item.sampleCount}
+                      {item.worstTradingDate ? ` · 最大偏差日 ${item.worstTradingDate}` : ''}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">平均绝对误差</p>
+                    <p className="mt-1 text-sm font-extrabold text-slate-900">
+                      {formatPercent(item.averageAbsoluteErrorRate)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">平均有符号误差</p>
+                    <p className="mt-1 text-sm font-extrabold text-slate-900">
+                      {formatSignedPercent(item.averageSignedErrorRate)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">偏高 / 偏低</p>
+                    <p className="mt-1 text-sm font-extrabold text-slate-900">
+                      {item.overestimatedCount} / {item.underestimatedCount}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50 overflow-hidden">
+            <div className="border-b border-slate-200 px-5 py-4">
+              <h2 className="text-lg font-semibold text-slate-900">优先修复名单</h2>
+              <p className="mt-1 text-sm text-slate-500">把高误差基金转换成可执行的排查动作。</p>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {recommendations.map((item) => (
+                <div
+                  key={item.fundCode}
+                  data-testid="accuracy-recommendation-row"
+                  className="group grid gap-3 px-6 py-5 transition hover:bg-slate-50/50"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-bold text-slate-900 group-hover:text-blue-600 transition">{item.fundName}</p>
+                    <span className="font-mono rounded-lg bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600 uppercase tracking-tighter">
+                      {item.fundCode}
+                    </span>
+                  </div>
+                  <p className="text-sm font-bold text-slate-700">{item.title}</p>
+                  <p className="text-sm leading-relaxed text-slate-500">{item.description}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="grid gap-6 lg:grid-cols-2">
+            <article className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50 overflow-hidden">
+              <div className="border-b border-slate-200 px-5 py-4">
+                <h2 className="text-lg font-semibold text-slate-900">误差来源模型</h2>
+                <p className="mt-1 text-sm text-slate-500">自动识别主导偏差类型、最高风险时段和收敛压力。</p>
+              </div>
+              <div className="grid gap-4 px-5 py-5 md:grid-cols-2">
+                <article
+                  data-testid="accuracy-source-model-card"
+                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:bg-slate-100"
+                >
+                  <p className="text-sm text-slate-500">主导偏差类型</p>
+                  <p className="mt-2 text-lg font-semibold text-slate-900">
+                    {hasLoadedSnapshots ? sourceModel.dominantDiagnosis.label : '读取中'}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    涉及 {sourceModel.dominantDiagnosis.affectedFundCount} 只基金
+                  </p>
+                </article>
+                <article
+                  data-testid="accuracy-source-model-card"
+                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:bg-slate-100"
+                >
+                  <p className="text-sm text-slate-500">最高风险时段</p>
+                  <p className="mt-2 text-lg font-semibold text-slate-900">
+                    {hasLoadedSnapshots ? sourceModel.riskiestTimeBucket.label : '读取中'}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {formatPercent(sourceModel.riskiestTimeBucket.averageAbsoluteErrorRate)}
+                  </p>
+                </article>
+                <article
+                  data-testid="accuracy-source-model-card"
+                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:bg-slate-100"
+                >
+                  <p className="text-sm text-slate-500">最高风险交易日</p>
+                  <p className="mt-2 text-lg font-semibold text-slate-900">
+                    {hasLoadedSnapshots ? sourceModel.riskiestTradingDate.tradingDate : '读取中'}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {formatPercent(sourceModel.riskiestTradingDate.averageAbsoluteErrorRate)}
+                  </p>
+                </article>
+                <article
+                  data-testid="accuracy-source-model-card"
+                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:bg-slate-100"
+                >
+                  <p className="text-sm text-slate-500">收敛压力</p>
+                  <p className="mt-2 text-lg font-semibold text-slate-900">
+                    {hasLoadedSnapshots ? formatShare(sourceModel.unresolvedPressure.unresolvedRatio) : '读取中'}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    未收敛 {sourceModel.unresolvedPressure.unresolvedSampleCount} 条
+                  </p>
+                </article>
+              </div>
+            </article>
+
+            <article className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50 overflow-hidden">
+              <div className="border-b border-slate-200 px-5 py-4">
+                <h2 className="text-lg font-semibold text-slate-900">估值修正策略</h2>
+                <p className="mt-1 text-sm text-slate-500">把来源模型转成一组更聚焦的修复顺序。</p>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {sourceStrategy.map((item) => (
+                  <div key={item.title} data-testid="accuracy-strategy-row" className="grid gap-2 px-6 py-5 transition hover:bg-slate-50/50">
+                    <p className="font-bold text-slate-900">{item.title}</p>
+                    <p className="text-sm leading-relaxed text-slate-500">{item.description}</p>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </section>
+
+          <section className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50 overflow-hidden">
+            <div className="border-b border-slate-200 px-5 py-4">
+              <h2 className="text-lg font-semibold text-slate-900">待处理快照流水</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                {unresolvedItems.length} 条未收敛样本，涉及 {unresolvedFundCount} 只基金。
+              </p>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {unresolvedItems.map((item) => (
+                <div
+                  key={item.id}
+                  data-testid="accuracy-unresolved-row"
+                  className="group grid gap-4 px-6 py-4 transition hover:bg-slate-50/50 md:grid-cols-[120px_minmax(0,1fr)_120px]"
+                >
+                  <div className="font-mono text-sm font-bold text-slate-900">{item.tradingDate}</div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-slate-900">{item.fundName}</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                      代码: {item.fundCode}
                     </p>
                   </div>
                   <div className="text-left md:text-right">
-                    <p className="text-xs uppercase tracking-wide text-slate-400">平均误差</p>
-                    <p className="mt-1 font-medium text-slate-900">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">上次行情</p>
+                    <p className="mt-1 text-xs font-bold text-slate-500">{item.quoteUpdatedAt}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="grid gap-6 lg:grid-cols-2">
+            <article className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50 overflow-hidden">
+              <div className="border-b border-slate-200 px-5 py-4">
+                <h2 className="text-lg font-semibold text-slate-900">时段误差分析</h2>
+                <p className="mt-1 text-sm text-slate-500">分析不同交易时段的估值偏移程度。</p>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {timeBuckets.map((bucket) => (
+                  <div
+                    key={bucket.label}
+                    data-testid="accuracy-time-bucket-row"
+                    className="group grid gap-4 px-6 py-4 transition hover:bg-slate-50/50 grid-cols-[minmax(0,1fr)_100px_80px]"
+                  >
+                    <p className="font-bold text-slate-900">{bucket.label}</p>
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">平均误差</p>
+                      <p className="mt-1 text-sm font-extrabold text-slate-900">{formatPercent(bucket.averageAbsoluteErrorRate)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">样本</p>
+                      <p className="mt-1 text-sm font-extrabold text-slate-900">{bucket.sampleCount}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </article>
+
+            <article className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50 overflow-hidden">
+              <div className="border-b border-slate-200 px-5 py-4">
+                <h2 className="text-lg font-semibold text-slate-900">日内偏差趋势</h2>
+                <p className="mt-1 text-sm text-slate-500">观察最近 5 个交易日的误差波动情况。</p>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {dailyTrend.map((trend) => (
+                  <div
+                    key={trend.tradingDate}
+                    data-testid="accuracy-trend-row"
+                    className="group grid gap-4 px-6 py-4 transition hover:bg-slate-50/50 grid-cols-[100px_minmax(0,1fr)_80px]"
+                  >
+                    <p className="font-mono text-sm font-bold text-slate-900">{trend.tradingDate}</p>
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">平均误差</p>
+                      <p className="mt-1 text-sm font-extrabold text-slate-900">{formatPercent(trend.averageAbsoluteErrorRate)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">样本</p>
+                      <p className="mt-1 text-sm font-extrabold text-slate-900">{trend.sampleCount}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </section>
+
+          <section className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50 overflow-hidden">
+            <div className="border-b border-slate-200 px-5 py-4">
+              <h2 className="text-lg font-semibold text-slate-900">全量基金诊断明细</h2>
+              <p className="mt-1 text-sm text-slate-500">查看所有已关注基金的样本量、误差水平及收敛状态。</p>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {fundItems.map((item) => (
+                <div
+                  key={item.fundCode}
+                  data-testid="accuracy-fund-row"
+                  className="group grid gap-4 px-6 py-4 transition hover:bg-slate-50/50 md:grid-cols-[minmax(0,1fr)_120px_120px]"
+                >
+                  <div className="min-w-0">
+                    <p className="font-bold text-slate-900">{item.fundName}</p>
+                    <p className="mt-1 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                      {item.fundCode} · 已收敛 {item.resolvedSampleCount} / {item.summary.sampleCount}
+                    </p>
+                  </div>
+                  <div className="text-left md:text-right">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">平均误差</p>
+                    <p className="mt-1 text-sm font-extrabold text-slate-900">
                       {formatPercent(item.summary.averageAbsoluteErrorRate)}
                     </p>
                   </div>
+                  <div className="text-left md:text-right">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">误差倾向</p>
+                    <p className="mt-1 text-sm font-extrabold text-slate-900">
+                      {formatSignedPercent(item.summary.averageSignedErrorRate)}
+                    </p>
+                  </div>
                 </div>
               ))}
             </div>
-          )}
-        </article>
+          </section>
 
-        <article className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 px-5 py-4">
-            <h2 className="text-lg font-semibold text-slate-900">误差分布</h2>
-            <p className="mt-1 text-sm text-slate-500">观察已收敛且可计算误差样本落在哪些误差区间。</p>
-          </div>
+          <section className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50 overflow-hidden">
+            <div className="border-b border-slate-200 px-5 py-4">
+              <h2 className="text-lg font-semibold text-slate-900">修正前后对比</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                用当前样本做离线修正模拟，先比较全局偏差、尾盘链路和诊断联动三种方案。
+              </p>
+            </div>
 
-          {!hasLoadedSnapshots ? (
-            <div className="px-5 py-10 text-sm text-slate-500">正在读取诊断数据…</div>
-          ) : (
-            <div className="divide-y divide-slate-200">
-              {errorDistribution.map((bucket) => (
-                <div
-                  key={bucket.label}
-                  data-testid="accuracy-error-bucket"
-                  className="grid gap-3 px-5 py-4 md:grid-cols-[minmax(0,1fr)_80px_80px]"
+            <div className="grid gap-6 p-6">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <article
+                  data-testid="accuracy-adjustment-summary-card"
+                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:bg-slate-100"
                 >
-                  <div>
-                    <p className="font-medium text-slate-900">{bucket.label}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-400">样本数</p>
-                    <p className="mt-1 font-medium text-slate-900">{bucket.count}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-400">占比</p>
-                    <p className="mt-1 font-medium text-slate-900">{formatShare(bucket.share)}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </article>
-      </section>
-
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 px-5 py-4">
-          <h2 className="text-lg font-semibold text-slate-900">异常基金排查</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            合并连续偏差、高误差和未收敛样本，按异常严重度给出排查顺序。
-          </p>
-        </div>
-
-        {!hasLoadedSnapshots ? (
-          <div className="px-5 py-10 text-sm text-slate-500">正在读取异常基金排查数据…</div>
-        ) : abnormalInvestigationItems.length === 0 ? (
-          <div className="px-5 py-10 text-sm text-slate-500">暂无需要优先排查的异常基金</div>
-        ) : (
-          <div className="divide-y divide-slate-200">
-            {abnormalInvestigationItems.map((item) => (
-              <div
-                key={item.fundCode}
-                data-testid="accuracy-abnormal-row"
-                className="grid gap-4 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_180px_minmax(0,1.1fr)]"
-              >
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium text-slate-900">{item.fundName}</p>
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-                      {item.fundCode}
-                    </span>
-                    {item.tags.map((tag) => (
-                      <span key={tag} className={getAbnormalTagClassName(tag)}>
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                  <p className="mt-2 text-sm text-slate-500">
-                    {item.diagnosis} · 最近异常 {item.latestAbnormalDate ?? '暂无'}
+                  <p className="text-sm text-slate-500">修正前平均误差</p>
+                  <p className="mt-2 text-lg font-semibold text-slate-900">
+                    {formatPercent(adjustmentSimulation.baselineAverageAbsoluteErrorRate)}
                   </p>
-                </div>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-400">平均误差</p>
-                    <p className="mt-1 font-medium text-slate-900">
-                      {formatPercent(item.averageAbsoluteErrorRate)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-400">样本</p>
-                    <p className="mt-1 font-medium text-slate-900">
-                      {item.resolvedSampleCount} / +{item.unresolvedSampleCount}
-                    </p>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">排查建议</p>
-                  <p className="mt-1 text-sm text-slate-600">{item.suggestion}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 px-5 py-4">
-          <h2 className="text-lg font-semibold text-slate-900">高误差原因拆解</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            按“持续偏高 / 持续偏低 / 波动偏差”归因，帮助确定优先修复名单。
-          </p>
-        </div>
-
-        {!hasLoadedSnapshots ? (
-          <div className="px-5 py-10 text-sm text-slate-500">正在读取诊断数据…</div>
-        ) : diagnostics.length === 0 ? (
-          <div className="px-5 py-10 text-sm text-slate-500">暂无可拆解的误差样本</div>
-        ) : (
-          <div className="divide-y divide-slate-200">
-            {diagnostics.map((item, index) => (
-              <div
-                key={item.fundCode}
-                data-testid="accuracy-diagnostic-row"
-                className="grid gap-4 px-5 py-4 lg:grid-cols-[minmax(0,1.4fr)_120px_120px_140px]"
-              >
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium text-slate-900">{item.fundName}</p>
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-                      {item.diagnosis}
-                    </span>
-                    <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-700">
-                      {getPriorityLabel(index)}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {item.fundCode} · 可计算 {item.computableSampleCount} / {item.sampleCount}
-                    {item.worstTradingDate ? ` · 最大偏差日 ${item.worstTradingDate}` : ''}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">平均绝对误差</p>
-                  <p className="mt-1 font-medium text-slate-900">
-                    {formatPercent(item.averageAbsoluteErrorRate)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">平均有符号误差</p>
-                  <p className="mt-1 font-medium text-slate-900">
-                    {formatSignedPercent(item.averageSignedErrorRate)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">偏高 / 偏低</p>
-                  <p className="mt-1 font-medium text-slate-900">
-                    {item.overestimatedCount} / {item.underestimatedCount}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="grid gap-4 lg:grid-cols-2">
-        <article className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 px-5 py-4">
-            <h2 className="text-lg font-semibold text-slate-900">时间段误差拆解</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              观察误差是否集中在上午、午后、尾盘或收盘后。
-            </p>
-          </div>
-
-          {!hasLoadedSnapshots ? (
-            <div className="px-5 py-10 text-sm text-slate-500">正在读取诊断数据…</div>
-          ) : (
-            <div className="divide-y divide-slate-200">
-              {timeBuckets.map((item) => (
-                <div
-                  key={item.label}
-                  data-testid="accuracy-time-bucket-row"
-                  className="grid gap-3 px-5 py-4 md:grid-cols-[minmax(0,1fr)_80px_120px]"
+                  <p className="mt-1 text-sm text-slate-500 text-slate-100">占位</p>
+                </article>
+                <article
+                  data-testid="accuracy-adjustment-summary-card"
+                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:bg-slate-100"
                 >
-                  <div>
-                    <p className="font-medium text-slate-900">{item.label}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-400">样本数</p>
-                    <p className="mt-1 font-medium text-slate-900">{item.sampleCount}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-400">平均误差</p>
-                    <p className="mt-1 font-medium text-slate-900">
-                      {formatPercent(item.averageAbsoluteErrorRate)}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </article>
-
-        <article className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 px-5 py-4">
-            <h2 className="text-lg font-semibold text-slate-900">最近交易日趋势</h2>
-            <p className="mt-1 text-sm text-slate-500">看误差是否在最近几个交易日持续扩大。</p>
-          </div>
-
-          {!hasLoadedSnapshots ? (
-            <div className="px-5 py-10 text-sm text-slate-500">正在读取诊断数据…</div>
-          ) : dailyTrend.length === 0 ? (
-            <div className="px-5 py-10 text-sm text-slate-500">暂无可用趋势样本</div>
-          ) : (
-            <div className="divide-y divide-slate-200">
-              {dailyTrend.map((item) => (
-                <div
-                  key={item.tradingDate}
-                  data-testid="accuracy-trend-row"
-                  className="grid gap-3 px-5 py-4 md:grid-cols-[minmax(0,1fr)_80px_80px_120px]"
-                >
-                  <div>
-                    <p className="font-medium text-slate-900">{item.tradingDate}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-400">样本</p>
-                    <p className="mt-1 font-medium text-slate-900">{item.sampleCount}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-400">基金数</p>
-                    <p className="mt-1 font-medium text-slate-900">{item.impactedFundCount}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-400">平均误差</p>
-                    <p className="mt-1 font-medium text-slate-900">
-                      {formatPercent(item.averageAbsoluteErrorRate)}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </article>
-      </section>
-
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 px-5 py-4">
-          <h2 className="text-lg font-semibold text-slate-900">优先修复名单</h2>
-          <p className="mt-1 text-sm text-slate-500">把高误差基金转换成可执行的排查动作。</p>
-        </div>
-
-        {!hasLoadedSnapshots ? (
-          <div className="px-5 py-10 text-sm text-slate-500">正在读取诊断数据…</div>
-        ) : recommendations.length === 0 ? (
-          <div className="px-5 py-10 text-sm text-slate-500">暂无修复建议</div>
-        ) : (
-          <div className="divide-y divide-slate-200">
-            {recommendations.map((item) => (
-              <div
-                key={item.fundCode}
-                data-testid="accuracy-recommendation-row"
-                className="grid gap-2 px-5 py-4"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-medium text-slate-900">{item.fundName}</p>
-                  <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700">
-                    {item.fundCode}
-                  </span>
-                </div>
-                <p className="text-sm font-medium text-slate-800">{item.title}</p>
-                <p className="text-sm text-slate-500">{item.description}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="grid gap-4 lg:grid-cols-2">
-        <article className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 px-5 py-4">
-            <h2 className="text-lg font-semibold text-slate-900">误差来源模型</h2>
-            <p className="mt-1 text-sm text-slate-500">自动识别主导偏差类型、最高风险时段和收敛压力。</p>
-          </div>
-
-          {!hasLoadedSnapshots ? (
-            <div className="px-5 py-10 text-sm text-slate-500">正在读取诊断数据…</div>
-          ) : (
-            <div className="grid gap-4 px-5 py-5 md:grid-cols-2">
-              <article
-                data-testid="accuracy-source-model-card"
-                className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-              >
-                <p className="text-sm text-slate-500">主导偏差类型</p>
-                <p className="mt-2 text-lg font-semibold text-slate-900">
-                  {sourceModel.dominantDiagnosis.label}
-                </p>
-                <p className="mt-1 text-sm text-slate-500">
-                  涉及 {sourceModel.dominantDiagnosis.affectedFundCount} 只基金
-                </p>
-              </article>
-              <article
-                data-testid="accuracy-source-model-card"
-                className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-              >
-                <p className="text-sm text-slate-500">最高风险时段</p>
-                <p className="mt-2 text-lg font-semibold text-slate-900">
-                  {sourceModel.riskiestTimeBucket.label}
-                </p>
-                <p className="mt-1 text-sm text-slate-500">
-                  {formatPercent(sourceModel.riskiestTimeBucket.averageAbsoluteErrorRate)}
-                </p>
-              </article>
-              <article
-                data-testid="accuracy-source-model-card"
-                className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-              >
-                <p className="text-sm text-slate-500">最高风险交易日</p>
-                <p className="mt-2 text-lg font-semibold text-slate-900">
-                  {sourceModel.riskiestTradingDate.tradingDate}
-                </p>
-                <p className="mt-1 text-sm text-slate-500">
-                  {formatPercent(sourceModel.riskiestTradingDate.averageAbsoluteErrorRate)}
-                </p>
-              </article>
-              <article
-                data-testid="accuracy-source-model-card"
-                className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-              >
-                <p className="text-sm text-slate-500">收敛压力</p>
-                <p className="mt-2 text-lg font-semibold text-slate-900">
-                  {formatShare(sourceModel.unresolvedPressure.unresolvedRatio)}
-                </p>
-                <p className="mt-1 text-sm text-slate-500">
-                  未收敛 {sourceModel.unresolvedPressure.unresolvedSampleCount} 条
-                </p>
-              </article>
-            </div>
-          )}
-        </article>
-
-        <article className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 px-5 py-4">
-            <h2 className="text-lg font-semibold text-slate-900">估值修正策略</h2>
-            <p className="mt-1 text-sm text-slate-500">把来源模型转成一组更聚焦的修复顺序。</p>
-          </div>
-
-          {!hasLoadedSnapshots ? (
-            <div className="px-5 py-10 text-sm text-slate-500">正在读取诊断数据…</div>
-          ) : (
-            <div className="divide-y divide-slate-200">
-              {sourceStrategy.map((item) => (
-                <div key={item.title} data-testid="accuracy-strategy-row" className="grid gap-2 px-5 py-4">
-                  <p className="font-medium text-slate-900">{item.title}</p>
-                  <p className="text-sm text-slate-500">{item.description}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </article>
-      </section>
-
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 px-5 py-4">
-          <h2 className="text-lg font-semibold text-slate-900">修正前后对比</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            用当前样本做离线修正模拟，先比较全局偏差、尾盘链路和诊断联动三种方案。
-          </p>
-        </div>
-
-        {!hasLoadedSnapshots ? (
-          <div className="px-5 py-10 text-sm text-slate-500">正在模拟修正实验…</div>
-        ) : (
-          <div className="grid gap-5 px-5 py-5">
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <article
-                data-testid="accuracy-adjustment-summary-card"
-                className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-              >
-                <p className="text-sm text-slate-500">修正前平均误差</p>
-                <p className="mt-2 text-lg font-semibold text-slate-900">
-                  {formatPercent(adjustmentSimulation.baselineAverageAbsoluteErrorRate)}
-                </p>
-                <p className="mt-1 text-sm text-slate-500">当前可计算样本的平均绝对误差</p>
-              </article>
-              <article
-                data-testid="accuracy-adjustment-summary-card"
-                className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-              >
-                <p className="text-sm text-slate-500">最佳实验方案</p>
-                <p className="mt-2 text-lg font-semibold text-slate-900">
-                  {adjustmentSimulation.bestScenarioLabel ?? '样本不足'}
-                </p>
-                <p className="mt-1 text-sm text-slate-500">当前样本下修正后误差最低的方案</p>
-              </article>
-              <article
-                data-testid="accuracy-adjustment-summary-card"
-                className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4"
-              >
-                <p className="text-sm text-emerald-700">修正后平均误差</p>
-                <p className="mt-2 text-lg font-semibold text-emerald-950">
-                  {formatPercent(adjustmentSimulation.bestScenarioAdjustedAverageAbsoluteErrorRate)}
-                </p>
-                <p className="mt-1 text-sm text-emerald-700">取最优方案的修正后平均绝对误差</p>
-              </article>
-              <article
-                data-testid="accuracy-adjustment-summary-card"
-                className="rounded-2xl border border-blue-200 bg-blue-50 p-4"
-              >
-                <p className="text-sm text-blue-700">相对改善</p>
-                <p className="mt-2 text-lg font-semibold text-blue-950">
-                  {adjustmentSimulation.bestScenarioImprovementRate === null
-                    ? '样本不足'
-                    : formatShare(adjustmentSimulation.bestScenarioImprovementRate)}
-                </p>
-                <p className="mt-1 text-sm text-blue-700">基于平均绝对误差下降幅度</p>
-              </article>
-            </div>
-
-            <div className="grid gap-4 xl:grid-cols-3">
-              <article className="overflow-hidden rounded-2xl border border-slate-200">
-                <div className="border-b border-slate-200 px-4 py-3">
-                  <h3 className="font-semibold text-slate-900">方案实验</h3>
-                  <p className="mt-1 text-sm text-slate-500">
-                    比较全局修正、尾盘修正和诊断联动修正三种模拟结果。
+                  <p className="text-sm text-slate-500">最佳实验方案</p>
+                  <p className="mt-2 text-lg font-semibold text-slate-900">
+                    {adjustmentSimulation.bestScenarioLabel ?? '样本不足'}
                   </p>
+                  <p className="mt-1 text-sm text-slate-500 text-slate-100">占位</p>
+                </article>
+                <article
+                  data-testid="accuracy-adjustment-summary-card"
+                  className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 transition hover:bg-emerald-100/50"
+                >
+                  <p className="text-sm text-emerald-700">修正后平均误差</p>
+                  <p className="mt-2 text-lg font-semibold text-emerald-950">
+                    {formatPercent(adjustmentSimulation.bestScenarioAdjustedAverageAbsoluteErrorRate)}
+                  </p>
+                  <p className="mt-1 text-sm text-emerald-700 text-emerald-50/0">占位</p>
+                </article>
+                <article
+                  data-testid="accuracy-adjustment-summary-card"
+                  className="rounded-2xl border border-blue-200 bg-blue-50 p-4 transition hover:bg-blue-100/50"
+                >
+                  <p className="text-sm text-blue-700">相对改善</p>
+                  <p className="mt-2 text-lg font-semibold text-blue-950">
+                    {adjustmentSimulation.bestScenarioImprovementRate === null
+                      ? '样本不足'
+                      : formatShare(adjustmentSimulation.bestScenarioImprovementRate)}
+                  </p>
+                  <p className="mt-1 text-sm text-blue-700 text-blue-50/0">占位</p>
+                </article>
+              </div>
+
+              <article className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+                <div className="border-b border-slate-100 bg-slate-50/50 px-6 py-4">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900">基金级修正候选名单</h3>
+                      <p className="mt-0.5 text-xs font-medium text-slate-500">
+                        按每只基金的模拟改善幅度排序，优先验证收益更明确的基金级修正路径。
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
+                        <button
+                          type="button"
+                          data-testid="accuracy-adjustment-filter-all"
+                          className={getToggleButtonClassName(adjustmentFundFilter === 'all')}
+                          onClick={() => setAdjustmentFundFilter('all')}
+                        >
+                          全部
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="accuracy-adjustment-filter-priority"
+                          className={getToggleButtonClassName(adjustmentFundFilter === 'priority')}
+                          onClick={() => setAdjustmentFundFilter('priority')}
+                        >
+                          优先验证
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2 bg-slate-900 p-1 rounded-xl shadow-sm">
+                        <button
+                          type="button"
+                          data-testid="accuracy-adjustment-sort-improvement"
+                          className={getToggleButtonClassName(adjustmentFundSort === 'improvement')}
+                          onClick={() => setAdjustmentFundSort('improvement')}
+                        >
+                          按改善幅度
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="accuracy-adjustment-sort-baseline"
+                          className={getToggleButtonClassName(adjustmentFundSort === 'baseline')}
+                          onClick={() => setAdjustmentFundSort('baseline')}
+                        >
+                          按基线误差
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="divide-y divide-slate-200">
-                  {adjustmentSimulation.scenarios.map((item) => (
-                    <div
-                      key={item.key}
-                      data-testid="accuracy-adjustment-row"
-                      className="grid gap-4 px-4 py-4 lg:grid-cols-[minmax(0,1.5fr)_110px_110px_110px]"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-medium text-slate-900">{item.label}</p>
-                          {item.key === adjustmentSimulation.bestScenarioKey ? (
-                            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">
-                              最优
-                            </span>
-                          ) : null}
+
+                {filteredAdjustmentFundInsights.length === 0 ? (
+                  <div className="px-6 py-12 text-sm font-medium text-slate-400 text-center italic">暂无符合条件的基金级候选</div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {filteredAdjustmentFundInsights.map((item) => {
+                      const fundDetail = getAdjustmentFundDetail(item.fundCode);
+
+                      return (
+                        <div key={item.fundCode} className="group transition hover:bg-slate-50/30">
+                          <div
+                            data-testid="accuracy-adjustment-fund-row"
+                            className="grid gap-4 px-4 py-4 lg:grid-cols-[minmax(0,1.4fr)_100px_100px_80px_60px]"
+                          >
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-bold text-slate-900 group-hover:text-emerald-700 transition">{item.fundName}</p>
+                              <span className="font-mono rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 uppercase tracking-tighter">
+                                {item.fundCode}
+                              </span>
+                              <span className="rounded-lg bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600 uppercase tracking-tighter ring-1 ring-inset ring-blue-200/50">
+                                {item.diagnosis}
+                              </span>
+                              <span
+                                className={`rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter ring-1 ring-inset ${
+                                  item.recommendationStatus === 'priority'
+                                    ? 'bg-emerald-50 text-emerald-700 ring-emerald-200/50'
+                                    : item.recommendationStatus === 'collect-more'
+                                      ? 'bg-amber-50 text-amber-700 ring-amber-200/50'
+                                      : 'bg-slate-50 text-slate-500 ring-slate-200/50'
+                                }`}
+                              >
+                                {item.recommendationLabel}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-sm text-slate-500">
+                              最优方案：{item.bestScenarioLabel ?? '样本不足'} · 样本 {item.sampleCount}
+                            </p>
+                            <p className="mt-1 text-sm text-slate-500">{item.recommendationReason}</p>
+                            <button
+                              type="button"
+                              data-testid={`accuracy-adjustment-fund-toggle-${item.fundCode}`}
+                              className="mt-3 inline-flex rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+                              onClick={() =>
+                                setExpandedAdjustmentFundCode((current) =>
+                                  current === item.fundCode ? null : item.fundCode,
+                                )
+                              }
+                            >
+                              {expandedAdjustmentFundCode === item.fundCode ? '收起明细' : '查看明细'}
+                            </button>
+                          </div>
+                          <div>
+                            <p className="text-xs uppercase tracking-wide text-slate-400">修正前</p>
+                            <p className="mt-1 font-medium text-slate-900">
+                              {formatPercent(item.baselineAverageAbsoluteErrorRate)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs uppercase tracking-wide text-slate-400">修正后</p>
+                            <p className="mt-1 font-medium text-slate-900">
+                              {formatPercent(item.bestScenarioAdjustedAverageAbsoluteErrorRate)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs uppercase tracking-wide text-slate-400">改善</p>
+                            <p className="mt-1 font-medium text-slate-900">
+                              {item.bestScenarioImprovementRate === null
+                                ? '样本不足'
+                                : formatShare(item.bestScenarioImprovementRate)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs uppercase tracking-wide text-slate-400">样本</p>
+                            <p className="mt-1 font-medium text-slate-900">{item.sampleCount}</p>
+                          </div>
                         </div>
-                        <p className="mt-1 text-sm text-slate-500">{item.description}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase tracking-wide text-slate-400">修正后误差</p>
-                        <p className="mt-1 font-medium text-slate-900">
-                          {formatPercent(item.adjustedAverageAbsoluteErrorRate)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase tracking-wide text-slate-400">改善</p>
-                        <p className="mt-1 font-medium text-slate-900">
-                          {item.improvementRate === null ? '样本不足' : formatShare(item.improvementRate)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase tracking-wide text-slate-400">影响样本</p>
-                        <p className="mt-1 font-medium text-slate-900">
-                          {item.adjustedSampleCount} / {item.sampleCount}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </article>
 
-              <article className="overflow-hidden rounded-2xl border border-slate-200">
-                <div className="border-b border-slate-200 px-4 py-3">
-                  <h3 className="font-semibold text-slate-900">时段修正机会</h3>
-                  <p className="mt-1 text-sm text-slate-500">
-                    按时段观察哪种修正方案收益最高，判断误差更偏系统性还是尾盘链路问题。
-                  </p>
-                </div>
-                <div className="divide-y divide-slate-200">
-                  {adjustmentSimulation.bucketInsights.map((item) => (
-                    <div
-                      key={item.label}
-                      data-testid="accuracy-adjustment-bucket-row"
-                      className="grid gap-4 px-4 py-4 lg:grid-cols-[minmax(0,1.2fr)_90px_120px_110px_90px]"
-                    >
-                      <div className="min-w-0">
-                        <p className="font-medium text-slate-900">{item.label}</p>
-                        <p className="mt-1 text-sm text-slate-500">
-                          最优方案：{item.bestScenarioLabel ?? '暂无样本'}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase tracking-wide text-slate-400">样本</p>
-                        <p className="mt-1 font-medium text-slate-900">{item.sampleCount}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase tracking-wide text-slate-400">修正前</p>
-                        <p className="mt-1 font-medium text-slate-900">
-                          {formatPercent(item.baselineAverageAbsoluteErrorRate)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase tracking-wide text-slate-400">修正后</p>
-                        <p className="mt-1 font-medium text-slate-900">
-                          {formatPercent(item.bestScenarioAdjustedAverageAbsoluteErrorRate)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase tracking-wide text-slate-400">改善</p>
-                        <p className="mt-1 font-medium text-slate-900">
-                          {item.bestScenarioImprovementRate === null
-                            ? '样本不足'
-                            : formatShare(item.bestScenarioImprovementRate)}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </article>
+                        {expandedAdjustmentFundCode === item.fundCode && (
+                          <div
+                            data-testid={`accuracy-adjustment-fund-detail-${item.fundCode}`}
+                            className="bg-slate-50 border-t border-slate-200 p-6 duration-300"
+                          >
+                             <div className="grid gap-6 xl:grid-cols-2">
+                               <div className="space-y-4">
+                                  <h4 className="text-sm font-bold text-slate-900">修正规则草案</h4>
+                                  <p className="text-sm text-slate-600 leading-relaxed">
+                                     建议原因：{item.recommendationReason}
+                                  </p>
+                                  <div className="inline-flex rounded-lg bg-emerald-50 px-3 py-1 text-sm font-bold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                                     建议动作：{item.recommendationLabel}
+                                  </div>
+                               </div>
 
-              <article className="overflow-hidden rounded-2xl border border-slate-200">
-                <div className="border-b border-slate-200 px-4 py-3">
-                  <h3 className="font-semibold text-slate-900">诊断类型修正机会</h3>
-                  <p className="mt-1 text-sm text-slate-500">
-                    观察持续偏高、持续偏低、波动偏差、样本不足四类问题，各自最适合哪种修正策略。
-                  </p>
-                </div>
-                <div className="divide-y divide-slate-200">
-                  {adjustmentSimulation.diagnosisInsights.map((item) => (
-                    <div
-                      key={item.diagnosis}
-                      data-testid="accuracy-adjustment-diagnosis-row"
-                      className="grid gap-4 px-4 py-4 lg:grid-cols-[minmax(0,1.1fr)_90px_120px_110px_90px]"
-                    >
-                      <div className="min-w-0">
-                        <p className="font-medium text-slate-900">{item.diagnosis}</p>
-                        <p className="mt-1 text-sm text-slate-500">
-                          最优方案：{item.bestScenarioLabel ?? '样本不足'}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase tracking-wide text-slate-400">样本</p>
-                        <p className="mt-1 font-medium text-slate-900">{item.sampleCount}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase tracking-wide text-slate-400">修正前</p>
-                        <p className="mt-1 font-medium text-slate-900">
-                          {formatPercent(item.baselineAverageAbsoluteErrorRate)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase tracking-wide text-slate-400">修正后</p>
-                        <p className="mt-1 font-medium text-slate-900">
-                          {formatPercent(item.bestScenarioAdjustedAverageAbsoluteErrorRate)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase tracking-wide text-slate-400">改善</p>
-                        <p className="mt-1 font-medium text-slate-900">
-                          {item.bestScenarioImprovementRate === null
-                            ? '样本不足'
-                            : formatShare(item.bestScenarioImprovementRate)}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </article>
-            </div>
+                               {fundDetail && (
+                                 <div className="space-y-4">
+                                    <h4 className="text-sm font-bold text-slate-900">时段分析</h4>
+                                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                                       {fundDetail.buckets.map(bucket => (
+                                         <div key={bucket.label} data-testid={`accuracy-adjustment-fund-bucket-row-${item.fundCode}`} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{bucket.label}</p>
+                                            <p className="mt-1 text-sm font-extrabold text-slate-900">{formatPercent(bucket.averageAbsoluteErrorRate)}</p>
+                                            <p className="mt-0.5 text-[10px] font-bold text-slate-400">{bucket.sampleCount} 样本</p>
+                                         </div>
+                                       ))}
+                                    </div>
+                                 </div>
+                               )}
+                             </div>
 
-            <article className="overflow-hidden rounded-2xl border border-slate-200">
-              <div className="border-b border-slate-200 px-4 py-3">
-                <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                  <div>
-                    <h3 className="font-semibold text-slate-900">基金级修正候选名单</h3>
-                    <p className="mt-1 text-sm text-slate-500">
-                      按每只基金的模拟改善幅度排序，优先验证收益更明确的基金级修正路径。
-                    </p>
+                             <div className="mt-8">
+                                <h4 className="text-sm font-bold text-slate-900 mb-4">样本明细</h4>
+                                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                                   <table className="min-w-full divide-y divide-slate-100">
+                                      <thead className="bg-slate-50/50 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                                         <tr>
+                                            <th className="px-4 py-3 text-left">交易日</th>
+                                            <th className="px-4 py-3 text-left">行情时间</th>
+                                            <th className="px-4 py-3 text-right">估值</th>
+                                            <th className="px-4 py-3 text-right">最终净值</th>
+                                            <th className="px-4 py-3 text-right">误差</th>
+                                         </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-600">
+                                         {fundDetail?.samples.map(sample => (
+                                           <tr key={sample.id} data-testid={`accuracy-adjustment-fund-sample-row-${item.fundCode}`} className="hover:bg-slate-50 transition">
+                                              <td className="px-4 py-3 font-mono">{sample.tradingDate}</td>
+                                              <td className="px-4 py-3 text-slate-400">{sample.quoteUpdatedAt}</td>
+                                              <td className="px-4 py-3 text-right font-mono text-slate-900">{sample.estimatedNav.toFixed(4)}</td>
+                                              <td className="px-4 py-3 text-right font-mono">{formatNavValue(sample.finalNav)}</td>
+                                              <td className={`px-4 py-3 text-right font-mono ${sample.absoluteErrorRate && sample.absoluteErrorRate > 0.01 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                                 {formatPercent(sample.absoluteErrorRate)}
+                                              </td>
+                                           </tr>
+                                         ))}
+                                      </tbody>
+                                   </table>
+                                </div>
+                             </div>
+
+                             <div className="mt-8 flex items-center gap-4">
+                                <span className="text-sm font-bold text-slate-900">更新决策:</span>
+                                <div className="flex gap-2">
+                                   <button
+                                     type="button"
+                                     data-testid={`accuracy-adjustment-decision-verification-${item.fundCode}`}
+                                     className="rounded-xl border border-blue-200 bg-white px-4 py-2 text-xs font-bold text-blue-700 shadow-sm transition hover:bg-blue-50"
+                                     onClick={() => handleAdjustmentDecision(item.fundCode, 'verification')}
+                                   >
+                                     加入验证
+                                   </button>
+                                   <button
+                                     type="button"
+                                     data-testid={`accuracy-adjustment-decision-watch-${item.fundCode}`}
+                                     className="rounded-xl border border-amber-200 bg-white px-4 py-2 text-xs font-bold text-amber-700 shadow-sm transition hover:bg-amber-50"
+                                     onClick={() => handleAdjustmentDecision(item.fundCode, 'watch')}
+                                   >
+                                     继续观察
+                                   </button>
+                                   <button
+                                     type="button"
+                                     className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 shadow-sm transition hover:bg-slate-50"
+                                     onClick={() => handleAdjustmentDecision(item.fundCode, 'dismissed')}
+                                   >
+                                     暂不处理
+                                   </button>
+                                </div>
+                             </div>
+                          </div>
+                        )}
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div className="flex flex-col gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-medium uppercase tracking-wide text-slate-400">状态</span>
+                )}
+              </article>
+
+              <article className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+                <div className="border-b border-slate-100 bg-slate-50/50 px-6 py-4">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900">修正决策执行队列</h3>
+                      <p className="mt-0.5 text-xs font-medium text-slate-500">
+                        处理“加入验证”、“继续观察”中的策略，复核回写效果。
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 bg-slate-100 p-1 rounded-xl">
                       <button
                         type="button"
-                        data-testid="accuracy-adjustment-filter-all"
-                        className={getToggleButtonClassName(adjustmentFundFilter === 'all')}
-                        onClick={() => setAdjustmentFundFilter('all')}
+                        data-testid="accuracy-adjustment-execution-filter-all"
+                        className={`rounded-lg px-3 py-1 text-[10px] font-bold transition ${adjustmentExecutionFilter === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        onClick={() => setAdjustmentExecutionFilter('all')}
                       >
                         全部
                       </button>
                       <button
                         type="button"
-                        data-testid="accuracy-adjustment-filter-priority"
-                        className={getToggleButtonClassName(adjustmentFundFilter === 'priority')}
-                        onClick={() => setAdjustmentFundFilter('priority')}
+                        data-testid="accuracy-adjustment-execution-filter-verification"
+                        className={`rounded-lg px-3 py-1 text-[10px] font-bold transition ${adjustmentExecutionFilter === 'verification' ? 'bg-white text-violet-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        onClick={() => setAdjustmentExecutionFilter('verification')}
                       >
-                        优先验证
+                        验证中
                       </button>
                       <button
                         type="button"
-                        data-testid="accuracy-adjustment-filter-collect-more"
-                        className={getToggleButtonClassName(adjustmentFundFilter === 'collect-more')}
-                        onClick={() => setAdjustmentFundFilter('collect-more')}
+                        data-testid="accuracy-adjustment-execution-filter-watch"
+                        className={`rounded-lg px-3 py-1 text-[10px] font-bold transition ${adjustmentExecutionFilter === 'watch' ? 'bg-white text-amber-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        onClick={() => setAdjustmentExecutionFilter('watch')}
                       >
-                        继续收集样本
+                        观察中
                       </button>
                       <button
                         type="button"
-                        data-testid="accuracy-adjustment-filter-not-recommended"
-                        className={getToggleButtonClassName(adjustmentFundFilter === 'not-recommended')}
-                        onClick={() => setAdjustmentFundFilter('not-recommended')}
+                        data-testid="accuracy-adjustment-execution-filter-recheck"
+                        className={`rounded-lg px-3 py-1 text-[10px] font-bold transition ${adjustmentExecutionFilter === 'recheck' ? 'bg-white text-rose-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        onClick={() => setAdjustmentExecutionFilter('recheck')}
                       >
-                        暂不建议修正
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-medium uppercase tracking-wide text-slate-400">排序</span>
-                      <button
-                        type="button"
-                        data-testid="accuracy-adjustment-sort-improvement"
-                        className={getToggleButtonClassName(adjustmentFundSort === 'improvement')}
-                        onClick={() => setAdjustmentFundSort('improvement')}
-                      >
-                        按改善幅度
-                      </button>
-                      <button
-                        type="button"
-                        data-testid="accuracy-adjustment-sort-baseline"
-                        className={getToggleButtonClassName(adjustmentFundSort === 'baseline')}
-                        onClick={() => setAdjustmentFundSort('baseline')}
-                      >
-                        按基线误差
+                        需重核
                       </button>
                     </div>
                   </div>
                 </div>
-              </div>
-              {adjustmentSimulation.fundInsights.length === 0 ? (
-                <div className="px-4 py-8 text-sm text-slate-500">暂无可计算的基金级候选</div>
-              ) : filteredAdjustmentFundInsights.length === 0 ? (
-                <div className="px-4 py-8 text-sm text-slate-500">暂无符合条件的基金级候选</div>
-              ) : (
-                <div className="divide-y divide-slate-200">
-                  {filteredAdjustmentFundInsights.map((item) => {
-                    const fundDetail = adjustmentFundDetails.get(item.fundCode);
-                    const ruleDraft = buildAdjustmentFundRuleDraft(item, fundDetail);
 
-                    return (
-                    <div key={item.fundCode}>
+                {filteredAdjustmentExecutionItems.length === 0 ? (
+                  <div className="px-6 py-12 text-sm font-medium text-slate-400 text-center italic">暂无待执行任务</div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {filteredAdjustmentExecutionItems.map((item) => (
                       <div
-                        data-testid="accuracy-adjustment-fund-row"
-                        className="grid gap-4 px-4 py-4 lg:grid-cols-[minmax(0,1.4fr)_120px_120px_110px_90px]"
+                        key={item.fundCode}
+                        data-testid="accuracy-adjustment-decision-row"
+                        className="group grid gap-6 px-6 py-5 lg:grid-cols-[minmax(0,1.4fr)_100px_100px_80px]"
                       >
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-medium text-slate-900">{item.fundName}</p>
-                            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                            <p className="font-bold text-slate-900">{item.fundName}</p>
+                            <span className="font-mono rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 uppercase tracking-tighter">
                               {item.fundCode}
                             </span>
-                            <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700">
-                              {item.diagnosis}
+                            <span className="rounded-lg bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-600 uppercase tracking-tighter ring-1 ring-inset ring-rose-200/50">
+                              {item.priorityLabel}
                             </span>
-                            <span
-                              className={
-                                item.recommendationStatus === 'priority'
-                                  ? 'rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700'
-                                  : item.recommendationStatus === 'collect-more'
-                                    ? 'rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700'
-                                    : 'rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600'
-                              }
-                            >
-                              {item.recommendationLabel}
+                            <span className={`inline-flex rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter ring-1 ring-inset ${getAdjustmentDecisionBadgeClassName(item.decisionStatus)} ring-current/20`}>
+                              {item.decisionLabel}
                             </span>
-                            {adjustmentFundDecisions[item.fundCode] ? (
-                              <span
-                                className={getAdjustmentDecisionBadgeClassName(
-                                  adjustmentFundDecisions[item.fundCode].status,
-                                )}
-                              >
-                                {getAdjustmentDecisionLabel(
-                                  adjustmentFundDecisions[item.fundCode].status,
-                                )}
-                              </span>
-                            ) : null}
                           </div>
-                          <p className="mt-1 text-sm text-slate-500">
-                            最优方案：{item.bestScenarioLabel ?? '样本不足'} · 样本 {item.sampleCount}
+                          <p className="mt-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            诊断: {item.diagnosis} · 决策策略: {item.ruleDraftTitle}
                           </p>
-                          <p className="mt-1 text-sm text-slate-500">{item.recommendationReason}</p>
-                          <button
-                            type="button"
-                            data-testid={`accuracy-adjustment-fund-toggle-${item.fundCode}`}
-                            className="mt-3 inline-flex rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
-                            onClick={() =>
-                              setExpandedAdjustmentFundCode((current) =>
-                                current === item.fundCode ? null : item.fundCode,
-                              )
-                            }
-                          >
-                            {expandedAdjustmentFundCode === item.fundCode ? '收起明细' : '查看明细'}
-                          </button>
-                        </div>
-                        <div>
-                          <p className="text-xs uppercase tracking-wide text-slate-400">修正前</p>
-                          <p className="mt-1 font-medium text-slate-900">
-                            {formatPercent(item.baselineAverageAbsoluteErrorRate)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs uppercase tracking-wide text-slate-400">修正后</p>
-                          <p className="mt-1 font-medium text-slate-900">
-                            {formatPercent(item.bestScenarioAdjustedAverageAbsoluteErrorRate)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs uppercase tracking-wide text-slate-400">改善</p>
-                          <p className="mt-1 font-medium text-slate-900">
-                            {item.bestScenarioImprovementRate === null
-                              ? '样本不足'
-                              : formatShare(item.bestScenarioImprovementRate)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs uppercase tracking-wide text-slate-400">样本</p>
-                          <p className="mt-1 font-medium text-slate-900">{item.sampleCount}</p>
-                        </div>
-                      </div>
 
-                      {expandedAdjustmentFundCode === item.fundCode ? (
-                        <div
-                          data-testid={`accuracy-adjustment-fund-detail-${item.fundCode}`}
-                          className="border-t border-slate-100 bg-slate-50 px-4 py-4"
-                        >
-                          <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
-                            <div className="space-y-4">
-                              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                                <p className="text-sm font-medium text-slate-900">建议依据</p>
-                                <div className="mt-3 space-y-2 text-sm text-slate-600">
-                                  <p>建议动作：{item.recommendationLabel}</p>
-                                  <p>诊断类型：{item.diagnosis}</p>
-                                  <p>最优方案：{item.bestScenarioLabel ?? '样本不足'}</p>
-                                  <p>建议原因：{item.recommendationReason}</p>
-                                </div>
-                              </div>
-
-                              <div
-                                data-testid={`accuracy-adjustment-fund-draft-${item.fundCode}`}
-                                className="rounded-2xl border border-slate-200 bg-white p-4"
-                              >
-                                <p className="text-sm font-medium text-slate-900">修正规则草案</p>
-                                <p className="mt-3 text-sm font-medium text-slate-900">
-                                  {ruleDraft.title}
-                                </p>
-                                <div className="mt-2 space-y-2 text-sm text-slate-600">
-                                  <p>{ruleDraft.summary}</p>
-                                  <p>{ruleDraft.focus}</p>
-                                </div>
-                                <div className="mt-4 flex flex-wrap gap-2">
-                                  <button
-                                    type="button"
-                                    data-testid={`accuracy-adjustment-decision-verification-${item.fundCode}`}
-                                    className={getDecisionButtonClassName(
-                                      adjustmentFundDecisions[item.fundCode]?.status === 'verification',
-                                    )}
-                                    onClick={() =>
-                                      handleAdjustmentDecision(item.fundCode, 'verification')
-                                    }
-                                  >
-                                    加入验证
-                                  </button>
-                                  <button
-                                    type="button"
-                                    data-testid={`accuracy-adjustment-decision-watch-${item.fundCode}`}
-                                    className={getDecisionButtonClassName(
-                                      adjustmentFundDecisions[item.fundCode]?.status === 'watch',
-                                    )}
-                                    onClick={() => handleAdjustmentDecision(item.fundCode, 'watch')}
-                                  >
-                                    继续观察
-                                  </button>
-                                  <button
-                                    type="button"
-                                    data-testid={`accuracy-adjustment-decision-dismissed-${item.fundCode}`}
-                                    className={getDecisionButtonClassName(
-                                      adjustmentFundDecisions[item.fundCode]?.status === 'dismissed',
-                                    )}
-                                    onClick={() =>
-                                      handleAdjustmentDecision(item.fundCode, 'dismissed')
-                                    }
-                                  >
-                                    暂不处理
-                                  </button>
-                                </div>
-                              </div>
-
-                              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                                <p className="text-sm font-medium text-slate-900">时段分布</p>
-                                <div className="mt-3 space-y-2">
-                                  {(fundDetail?.buckets ?? []).map((bucket) => (
-                                    <div
-                                      key={bucket.label}
-                                      data-testid={`accuracy-adjustment-fund-bucket-row-${item.fundCode}`}
-                                      className="grid grid-cols-[minmax(0,1fr)_72px_88px] gap-3 text-sm"
-                                    >
-                                      <p className="text-slate-700">{bucket.label}</p>
-                                      <p className="text-slate-500">{bucket.sampleCount} 条</p>
-                                      <p className="text-right font-medium text-slate-900">
-                                        {formatPercent(bucket.averageAbsoluteErrorRate)}
-                                      </p>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-
-                              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                                <p className="text-sm font-medium text-slate-900">上线前验证清单</p>
-                                <ul className="mt-3 space-y-2 text-sm text-slate-600">
-                                  {ruleDraft.checklist.map((entry) => (
-                                    <li
-                                      key={entry}
-                                      data-testid={`accuracy-adjustment-fund-checklist-item-${item.fundCode}`}
-                                      className="flex gap-2"
-                                    >
-                                      <span className="mt-[5px] h-1.5 w-1.5 rounded-full bg-slate-400" />
-                                      <span>{entry}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
+                          {item.validationRecommendationStatus && item.validationRecommendationStatus !== 'keep' && (
+                            <div className="mt-3 rounded-xl border border-rose-100 bg-rose-50/50 p-3">
+                               <div className="flex items-center justify-between gap-2">
+                                 <p className="text-[10px] font-bold text-rose-900">同步校验预警</p>
+                                 <span className={`rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter ${getAdjustmentValidationRecommendationBadgeClassName(item.validationRecommendationStatus)}`}>
+                                   {item.validationRecommendationLabel}
+                                 </span>
+                               </div>
+                               <p className="mt-1 text-[10px] font-bold text-rose-700">{item.validationRecommendationReason}</p>
                             </div>
+                          )}
 
-                            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                              <p className="text-sm font-medium text-slate-900">样本明细</p>
-                              <div className="mt-3 space-y-3">
-                                {(fundDetail?.samples ?? []).map((sample) => (
-                                  <div
-                                    key={sample.id}
-                                    data-testid={`accuracy-adjustment-fund-sample-row-${item.fundCode}`}
-                                    className="rounded-2xl border border-slate-100 bg-slate-50 p-3"
-                                  >
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      <p className="text-sm font-medium text-slate-900">
-                                        {sample.tradingDate}
-                                      </p>
-                                      <span className="rounded-full bg-white px-2 py-0.5 text-xs text-slate-500">
-                                        {sample.quoteUpdatedAt}
-                                      </span>
-                                      <span className="rounded-full bg-white px-2 py-0.5 text-xs text-slate-500">
-                                        {getAdjustmentFundTimeBucket(sample.quoteUpdatedAt)}
-                                      </span>
-                                      <span className="rounded-full bg-white px-2 py-0.5 text-xs text-slate-500">
-                                        {sample.resolved ? '已收敛' : '未收敛'}
-                                      </span>
-                                    </div>
-                                    <div className="mt-2 grid gap-2 text-sm text-slate-600 md:grid-cols-3">
-                                      <p>估值 {formatNavValue(sample.estimatedNav)}</p>
-                                      <p>净值 {formatNavValue(sample.finalNav)}</p>
-                                      <p>误差 {formatPercent(sample.absoluteErrorRate)}</p>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
+                          <div className="mt-4 flex flex-wrap gap-2">
+                             <button
+                               type="button"
+                               data-testid={`accuracy-adjustment-execution-open-${item.fundCode}`}
+                               className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-bold text-slate-600 shadow-sm transition hover:border-slate-300 hover:text-slate-900"
+                               onClick={() => handleOpenAdjustmentExecution(item.fundCode)}
+                             >
+                               查看诊断依据
+                           </button>
+                           {item.decisionStatus === 'verification' && (
+                             <button
+                               type="button"
+                               data-testid={`accuracy-adjustment-execution-complete-${item.fundCode}`}
+                               className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-1.5 text-[10px] font-bold text-white shadow-sm transition hover:bg-emerald-700"
+                               onClick={() => handleAdjustmentDecision(item.fundCode, 'validated')}
+                             >
+                               标记已验证通过
+                             </button>
+                           )}
+                           {item.executionFilterKey === 'recheck' && (
+                             <div className="flex gap-2">
+                               <button
+                                 type="button"
+                                 data-testid={`accuracy-adjustment-execution-complete-${item.fundCode}`}
+                                 className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-1.5 text-[10px] font-bold text-white shadow-sm transition hover:bg-emerald-700"
+                                 onClick={() => handleAdjustmentDecision(item.fundCode, 'validated')}
+                               >
+                                 重新确认通过
+                               </button>
+                               <button
+                                 type="button"
+                                 className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-3 py-1.5 text-[10px] font-bold text-white shadow-sm transition hover:bg-rose-700"
+                                 onClick={() => handleAdjustmentDecision(item.fundCode, 'failed')}
+                               >
+                                 重新标记失败
+                               </button>
+                             </div>
+                           )}
                         </div>
-                      ) : null}
-                    </div>
-                    );
-                  })}
-                </div>
-              )}
-            </article>
-
-            <article className="overflow-hidden rounded-2xl border border-slate-200">
-              <div className="border-b border-slate-200 px-4 py-3">
-                <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                  <div>
-                    <h3 className="font-semibold text-slate-900">基金级修正待执行列表</h3>
-                    <p className="mt-1 text-sm text-slate-500">
-                      汇总已手动确认进入验证/观察，或被回写验证重新拉回复核的基金。
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-medium uppercase tracking-wide text-slate-400">状态</span>
-                    <button
-                      type="button"
-                      data-testid="accuracy-adjustment-execution-filter-all"
-                      className={getToggleButtonClassName(adjustmentExecutionFilter === 'all')}
-                      onClick={() => setAdjustmentExecutionFilter('all')}
-                    >
-                      全部
-                    </button>
-                    <button
-                      type="button"
-                      data-testid="accuracy-adjustment-execution-filter-verification"
-                      className={getToggleButtonClassName(
-                        adjustmentExecutionFilter === 'verification',
-                      )}
-                      onClick={() => setAdjustmentExecutionFilter('verification')}
-                    >
-                      加入验证
-                    </button>
-                    <button
-                      type="button"
-                      data-testid="accuracy-adjustment-execution-filter-watch"
-                      className={getToggleButtonClassName(adjustmentExecutionFilter === 'watch')}
-                      onClick={() => setAdjustmentExecutionFilter('watch')}
-                    >
-                      继续观察
-                    </button>
-                    <button
-                      type="button"
-                      data-testid="accuracy-adjustment-execution-filter-recheck"
-                      className={getToggleButtonClassName(adjustmentExecutionFilter === 'recheck')}
-                      onClick={() => setAdjustmentExecutionFilter('recheck')}
-                    >
-                      回写复核
-                    </button>
-                  </div>
-                </div>
-              </div>
-              {adjustmentExecutionItems.length === 0 ? (
-                <div className="px-4 py-8 text-sm text-slate-500">暂无已确认的基金级待执行项</div>
-              ) : filteredAdjustmentExecutionItems.length === 0 ? (
-                <div className="px-4 py-8 text-sm text-slate-500">暂无符合条件的待执行项</div>
-              ) : (
-                <div className="divide-y divide-slate-200">
-                  {filteredAdjustmentExecutionItems.map((item) => (
-                    <div
-                      key={item.fundCode}
-                      data-testid="accuracy-adjustment-decision-row"
-                      className="grid gap-4 px-4 py-4 lg:grid-cols-[minmax(0,1.2fr)_90px_150px_minmax(0,1fr)_100px]"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-medium text-slate-900">{item.fundName}</p>
-                          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-                            {item.fundCode}
-                          </span>
-                          <span className={getAdjustmentDecisionBadgeClassName(item.decisionStatus)}>
-                            {item.decisionLabel}
-                          </span>
-                          {item.validationRecommendationStatus ? (
-                            <span
-                              className={getAdjustmentValidationRecommendationBadgeClassName(
-                                item.validationRecommendationStatus,
-                              )}
-                            >
-                              {item.validationRecommendationLabel}
-                            </span>
-                          ) : null}
-                          <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-700">
-                            {item.priorityLabel}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-sm text-slate-500">
-                          {item.diagnosis} · {item.ruleDraftTitle}
-                        </p>
                       </div>
-                      <div>
-                        <p className="text-xs uppercase tracking-wide text-slate-400">优先级</p>
-                        <p className="mt-1 font-medium text-slate-900">{item.priorityLabel}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase tracking-wide text-slate-400">最近决策</p>
-                        <p className="mt-1 font-medium text-slate-900">{item.updatedAtLabel}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase tracking-wide text-slate-400">下一步</p>
-                        <p className="mt-1 font-medium text-slate-900">{item.decisionLabel}</p>
-                        <p className="text-xs uppercase tracking-wide text-slate-400">执行建议</p>
-                        <p className="mt-1 text-sm text-slate-600">{item.nextStep}</p>
-                      </div>
-                      <div className="flex items-start justify-start lg:justify-end">
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            data-testid={`accuracy-adjustment-execution-complete-${item.fundCode}`}
-                            className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition hover:border-emerald-300"
-                            onClick={() => handleAdjustmentDecision(item.fundCode, 'validated')}
-                          >
-                            {getAdjustmentExecutionCompleteLabel(item.executionFilterKey)}
-                          </button>
-                          <button
-                            type="button"
-                            data-testid={`accuracy-adjustment-execution-failed-${item.fundCode}`}
-                            className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 transition hover:border-rose-300"
-                            onClick={() => handleAdjustmentDecision(item.fundCode, 'failed')}
-                          >
-                            {getAdjustmentExecutionFailedLabel(item.executionFilterKey)}
-                          </button>
-                          <button
-                            type="button"
-                            data-testid={`accuracy-adjustment-execution-watch-${item.fundCode}`}
-                            className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 transition hover:border-amber-300"
-                            onClick={() => handleAdjustmentDecision(item.fundCode, 'watch')}
-                          >
-                            回退观察
-                          </button>
-                          <button
-                            type="button"
-                            data-testid={`accuracy-adjustment-execution-open-${item.fundCode}`}
-                            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
-                            onClick={() => handleOpenAdjustmentExecution(item.fundCode)}
-                          >
-                            查看基金明细
-                          </button>
-                        </div>
+                      <div className="text-right">
+                         <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">最近决策</p>
+                         <p className="mt-1 text-[10px] font-bold text-slate-900">{item.updatedAtLabel}</p>
                       </div>
                     </div>
                   ))}
@@ -2194,272 +2047,149 @@ export function AccuracyDashboard() {
               )}
             </article>
 
-            <article className="overflow-hidden rounded-2xl border border-slate-200">
-              <div className="border-b border-slate-200 px-4 py-3">
-                <h3 className="font-semibold text-slate-900">历史决策记录</h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  保留基金级修正动作的时间线，方便回看验证通过、失败与回退记录。
-                </p>
+            <article className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50 overflow-hidden">
+              <div className="border-b border-slate-100 bg-slate-50/50 px-6 py-4">
+                <h2 className="text-lg font-bold text-slate-900">修正决策历史</h2>
+                <p className="mt-0.5 text-xs font-medium text-slate-400 uppercase tracking-wider">Decision Audit Log</p>
               </div>
-              {adjustmentHistoryItems.length === 0 ? (
-                <div className="px-4 py-8 text-sm text-slate-500">暂无历史决策记录</div>
-              ) : (
-                <div className="divide-y divide-slate-200">
-                  {adjustmentHistoryItems.map((item, index) => (
+              <div className="divide-y divide-slate-100">
+                {adjustmentHistoryItems.length === 0 ? (
+                  <div className="px-6 py-12 text-sm font-medium text-slate-400 text-center italic">暂无历史决策记录</div>
+                ) : (
+                  adjustmentHistoryItems.map((item, index) => (
                     <div
                       key={`${item.fundCode}-${item.updatedAt}-${index}`}
                       data-testid="accuracy-adjustment-history-row"
-                      className="grid gap-4 px-4 py-4 lg:grid-cols-[minmax(0,1.4fr)_160px_160px]"
+                      className="group grid gap-4 px-6 py-4 transition hover:bg-slate-50/50 md:grid-cols-[minmax(0,1fr)_140px_140px]"
                     >
                       <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-medium text-slate-900">{item.fundName}</p>
-                          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-                            {item.fundCode}
-                          </span>
-                          <span className={getAdjustmentDecisionBadgeClassName(item.status)}>
-                            {item.statusLabel}
-                          </span>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-slate-900">{item.fundName}</p>
+                          <span className="font-mono rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">{item.fundCode}</span>
                         </div>
-                        <p className="mt-1 text-sm text-slate-500">{item.ruleDraftTitle}</p>
+                        <p className="mt-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          策略: {item.ruleDraftTitle}
+                        </p>
                       </div>
                       <div>
-                        <p className="text-xs uppercase tracking-wide text-slate-400">动作状态</p>
-                        <p className="mt-1 font-medium text-slate-900">{item.statusLabel}</p>
+                         <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">决策状态</p>
+                         <p className={`mt-1 text-sm font-extrabold ${item.status === 'failed' ? 'text-rose-600' : 'text-slate-900'}`}>{item.statusLabel}</p>
                       </div>
-                      <div>
-                        <p className="text-xs uppercase tracking-wide text-slate-400">记录时间</p>
-                        <p className="mt-1 font-medium text-slate-900">{item.updatedAtLabel}</p>
+                      <div className="text-right">
+                         <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">更新时间</p>
+                         <p className="mt-1 text-[10px] font-bold text-slate-900">{item.updatedAtLabel}</p>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                  ))
+                )}
+              </div>
             </article>
 
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4">
-              <p className="text-sm font-medium text-slate-900">当前模拟结论</p>
-              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-500">
-                <li>优先先做能稳定降低平均误差的方案验证，再继续拆分基金级规则。</li>
-                <li>如果尾盘专用修正收益最高，说明实时估值准确度的核心瓶颈更可能在盘末链路。</li>
-                <li>若诊断联动收益继续领先，再进入基金分组和更细颗粒度修正规则。</li>
-              </ul>
-            </div>
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 px-5 py-4">
-          <h2 className="text-lg font-semibold text-slate-900">未收敛样本诊断</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            {hasLoadedSnapshots
-              ? `${overall.unresolvedSampleCount} 条未收敛样本，涉及 ${unresolvedFundCount} 只基金。`
-              : '用于识别哪些基金还没有拿到最终净值。'}
-          </p>
-        </div>
-
-        {!hasLoadedSnapshots ? (
-          <div className="px-5 py-10 text-sm text-slate-500">正在读取本地准确度样本…</div>
-        ) : unresolvedItems.length === 0 ? (
-          <div className="px-5 py-10 text-sm text-slate-500">暂无未收敛样本</div>
-        ) : (
-          <div className="divide-y divide-slate-200">
-            {unresolvedItems.map((item) => (
-              <div
-                key={item.id}
-                data-testid="accuracy-unresolved-row"
-                className="grid gap-3 px-5 py-4 md:grid-cols-[minmax(0,1.2fr)_120px_minmax(0,1fr)] md:items-center"
-              >
-                <div className="min-w-0">
-                  <p className="font-medium text-slate-900">{item.fundName}</p>
-                  <p className="text-sm text-slate-500">{item.fundCode}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">交易日</p>
-                  <p className="mt-1 font-medium text-slate-900">{item.tradingDate}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">估值时间</p>
-                  <p className="mt-1 font-medium text-slate-900">{item.quoteUpdatedAt}</p>
-                </div>
+            <article className="rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/50 overflow-hidden">
+              <div className="border-b border-slate-200 px-5 py-4">
+                <h2 className="text-lg font-semibold text-slate-900">修正效果回写验证</h2>
+                <p className="mt-1 text-sm text-slate-500">监控已上线修正规则在最近已收敛样本中的实际改善表现。</p>
               </div>
-            ))}
-          </div>
-        )}
-      </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 px-5 py-4">
-          <h2 className="text-lg font-semibold text-slate-900">修正效果回写验证</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            仅统计当前已验证通过的基金，持续比较修正后误差是否真的优于原始误差。
-          </p>
-        </div>
-
-        {!hasLoadedSnapshots ? (
-          <div className="px-5 py-10 text-sm text-slate-500">正在汇总修正回写验证…</div>
-        ) : adjustmentValidationSummary.sampleCount === 0 ? (
-          <div className="px-5 py-10 text-sm text-slate-500">
-            暂无已验证通过且可回写验证的收敛样本
-          </div>
-        ) : (
-          <div className="grid gap-5 px-5 py-5">
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <article
-                data-testid="accuracy-adjustment-validation-summary-card"
-                className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-              >
-                <p className="text-sm text-slate-500">已验证基金</p>
-                <p className="mt-2 text-lg font-semibold text-slate-900">
-                  {adjustmentValidationSummary.validatedFundCount}
-                </p>
-                <p className="mt-1 text-sm text-slate-500">当前仍处于 validated 状态的基金数</p>
-              </article>
-              <article
-                data-testid="accuracy-adjustment-validation-summary-card"
-                className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-              >
-                <p className="text-sm text-slate-500">回写样本</p>
-                <p className="mt-2 text-lg font-semibold text-slate-900">
-                  {adjustmentValidationSummary.sampleCount}
-                </p>
-                <p className="mt-1 text-sm text-slate-500">
-                  改善 {adjustmentValidationSummary.improvedSampleCount} · 恶化{' '}
-                  {adjustmentValidationSummary.worsenedSampleCount}
-                </p>
-              </article>
-              <article
-                data-testid="accuracy-adjustment-validation-summary-card"
-                className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-              >
-                <p className="text-sm text-slate-500">修正前 / 后</p>
-                <p className="mt-2 text-lg font-semibold text-slate-900">
-                  {`${formatPercent(
-                    adjustmentValidationSummary.baselineAverageAbsoluteErrorRate,
-                  )} → ${formatPercent(
-                    adjustmentValidationSummary.adjustedAverageAbsoluteErrorRate,
-                  )}`}
-                </p>
-                <p className="mt-1 text-sm text-slate-500">按 validated 基金的回写样本重新计算</p>
-              </article>
-              <article
-                data-testid="accuracy-adjustment-validation-summary-card"
-                className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4"
-              >
-                <p className="text-sm text-emerald-700">净改善</p>
-                <p className="mt-2 text-lg font-semibold text-emerald-950">
-                  {adjustmentValidationSummary.improvementRate === null
-                    ? '样本不足'
-                    : formatShare(adjustmentValidationSummary.improvementRate)}
-                </p>
-                <p className="mt-1 text-sm text-emerald-700">以平均绝对误差变化衡量</p>
-              </article>
-            </div>
-
-            <div className="overflow-hidden rounded-2xl border border-slate-200">
-              <div className="border-b border-slate-200 px-4 py-3">
-                <h3 className="font-semibold text-slate-900">基金级回写验证结果</h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  优先关注改善幅度持续为正的基金，若出现恶化样本需重新审视规则。
-                </p>
-              </div>
-              <div className="divide-y divide-slate-200">
-                {adjustmentValidationSummary.funds.map((item) => (
-                  <div
-                    key={item.fundCode}
-                    data-testid="accuracy-adjustment-validation-fund-row"
-                    className="grid gap-4 px-4 py-4 lg:grid-cols-[minmax(0,1.5fr)_100px_110px_110px_90px_90px]"
+              <div className="grid gap-6 p-6">
+                <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4">
+                  <article
+                    data-testid="accuracy-adjustment-validation-summary-card"
+                    className="rounded-2xl border border-slate-100 bg-slate-50/30 p-5 transition hover:bg-slate-50"
                   >
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-medium text-slate-900">{item.fundName}</p>
-                        <span
-                          className={getAdjustmentValidationRecommendationBadgeClassName(
-                            item.recommendationStatus,
-                          )}
-                        >
-                          {item.recommendationLabel}
-                        </span>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">已验证基金数</p>
+                    <p className="mt-2 text-xl font-extrabold text-slate-900">
+                      {adjustmentValidationSummary.validatedFundCount}
+                    </p>
+                  </article>
+                  <article
+                    data-testid="accuracy-adjustment-validation-summary-card"
+                    className="rounded-2xl border border-rose-100 bg-rose-50/30 p-5 transition hover:bg-rose-50"
+                  >
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-rose-600/70">需重核基金数</p>
+                    <p className="mt-2 text-xl font-extrabold text-rose-950">
+                      {adjustmentValidationSummary.recheckFundCount}
+                    </p>
+                  </article>
+                  <article
+                    data-testid="accuracy-adjustment-validation-summary-card"
+                    className="rounded-2xl border border-blue-100 bg-blue-50/30 p-5 transition hover:bg-blue-50"
+                  >
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-blue-600/70">回写改善覆盖</p>
+                    <p className="mt-2 text-xl font-extrabold text-blue-950">
+                      {formatShare(adjustmentValidationSummary.improvementCoverage)}
+                    </p>
+                  </article>
+                  <article
+                    data-testid="accuracy-adjustment-validation-summary-card"
+                    className="rounded-2xl border border-slate-100 bg-slate-50/30 p-5 transition hover:bg-slate-50"
+                  >
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">潜在回写观测</p>
+                    <p className="mt-2 text-xl font-extrabold text-slate-900">
+                      {adjustmentValidationSummary.funds.length}
+                    </p>
+                  </article>
+                </div>
+
+                <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200 overflow-hidden">
+                  {adjustmentValidationSummary.funds.length === 0 ? (
+                    <div className="px-6 py-12 text-sm font-medium text-slate-400 text-center italic">暂无生效中的修正规则</div>
+                  ) : (
+                    adjustmentValidationSummary.funds.map((item) => (
+                      <div
+                        key={item.fundCode}
+                        data-testid="accuracy-adjustment-validation-fund-row"
+                        className="group grid gap-6 px-6 py-5 lg:grid-cols-[minmax(0,1.4fr)_100px_100px_100px] transition hover:bg-slate-50/50"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-bold text-slate-900">{item.fundName}</p>
+                            <span className="font-mono rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 uppercase tracking-tighter">
+                              {item.fundCode}
+                            </span>
+                            <span className={`rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter ring-1 ring-inset ${getAdjustmentValidationRecommendationBadgeClassName(item.recommendationStatus)} ring-current/20`}>
+                              {item.recommendationLabel}
+                            </span>
+                          </div>
+                          <p className="mt-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-relaxed">
+                            {item.recommendationReason}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">验证样本</p>
+                          <p className="mt-1 text-sm font-extrabold text-slate-900">
+                            {item.validationSampleCount}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">平均误差</p>
+                          <p className="mt-1 text-sm font-extrabold text-slate-900">
+                            {formatPercent(item.averageAbsoluteErrorRate)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">实际改善</p>
+                          <p className={`mt-1 text-sm font-extrabold ${item.averageImprovementRate && item.averageImprovementRate > 0 ? 'text-blue-600' : 'text-slate-400'}`}>
+                            {item.averageImprovementRate === null ? '--' : formatShare(item.averageImprovementRate)}
+                          </p>
+                        </div>
                       </div>
-                      <p className="mt-1 text-sm text-slate-500">{item.fundCode}</p>
-                      <p className="mt-1 text-sm text-slate-500">{item.recommendationReason}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-slate-400">改善样本</p>
-                      <p className="mt-1 font-medium text-slate-900">
-                        {item.improvedSampleCount} / {item.sampleCount}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-slate-400">修正前</p>
-                      <p className="mt-1 font-medium text-slate-900">
-                        {formatPercent(item.baselineAverageAbsoluteErrorRate)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-slate-400">修正后</p>
-                      <p className="mt-1 font-medium text-slate-900">
-                        {formatPercent(item.adjustedAverageAbsoluteErrorRate)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-slate-400">改善</p>
-                      <p className="mt-1 font-medium text-slate-900">
-                        {item.improvementRate === null ? '样本不足' : formatShare(item.improvementRate)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-slate-400">恶化</p>
-                      <p className="mt-1 font-medium text-slate-900">{item.worsenedSampleCount}</p>
-                    </div>
-                  </div>
-                ))}
+                    ))
+                  )}
+                </div>
               </div>
+            </article>
             </div>
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 px-5 py-4">
-          <h2 className="text-lg font-semibold text-slate-900">按基金汇总</h2>
-          <p className="mt-1 text-sm text-slate-500">按平均误差从高到低排序，便于优先排查偏差更大的基金。</p>
+          </section>
         </div>
+      )}
 
-        {!hasLoadedSnapshots ? (
-          <div className="px-5 py-10 text-sm text-slate-500">正在读取本地准确度样本…</div>
-        ) : fundItems.length === 0 ? (
-          <div className="px-5 py-10 text-sm text-slate-500">暂无估值准确度样本</div>
-        ) : (
-          <div className="divide-y divide-slate-200">
-            {fundItems.map((item) => (
-              <div
-                key={item.fundCode}
-                data-testid="accuracy-fund-row"
-                className="grid gap-3 px-5 py-4 md:grid-cols-[minmax(0,1.5fr)_140px_140px] md:items-center"
-              >
-                <div className="min-w-0">
-                  <p className="font-medium text-slate-900">{item.fundName}</p>
-                  <p className="text-sm text-slate-500">{item.fundCode}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">已收敛 / 总样本</p>
-                  <p className="mt-1 font-medium text-slate-900">
-                    {item.resolvedSampleCount} / {item.summary.sampleCount}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">平均误差</p>
-                  <p className="mt-1 font-medium text-slate-900">
-                    {formatPercent(item.summary.averageAbsoluteErrorRate)}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+      <AccuracyImportDialog
+        open={isImportDialogOpen}
+        onClose={() => setIsImportDialogOpen(false)}
+        accuracyStore={accuracyStore}
+        onImportSuccess={handleImportSuccess}
+      />
     </main>
   );
 }

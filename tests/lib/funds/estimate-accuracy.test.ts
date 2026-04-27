@@ -70,6 +70,7 @@ describe('estimate accuracy domain', () => {
     ]);
 
     expect(summary.averageAbsoluteErrorRate).toBeCloseTo(0.006333333, 6);
+    expect(summary.averageSignedErrorRate).toBeCloseTo(0.006333333, 6);
     expect(summary.resolvedTradingDayCount).toBe(3);
     expect(summary.highErrorResolvedSampleCount).toBe(0);
     expect(gradeEstimateConfidence(summary)).toBe('medium');
@@ -187,6 +188,7 @@ describe('estimate accuracy domain', () => {
       resolvedTradingDayCount: 0,
       highErrorResolvedSampleCount: 0,
       averageAbsoluteErrorRate: null,
+      averageSignedErrorRate: null,
       latestQuoteUpdatedAt: null,
       latestResolvedAt: null,
     });

@@ -67,6 +67,8 @@ describe('AuthProvider accuracy store integration', () => {
       upsertSnapshots: vi.fn(),
       loadAdjustmentDecisions: vi.fn(),
       saveAdjustmentDecisions: vi.fn(),
+      dryRunImport: vi.fn(),
+      applyImport: vi.fn(),
     });
     mockCreateAuthenticatedAccuracyStore.mockReturnValue({
       kind: 'authenticated',
@@ -76,6 +78,8 @@ describe('AuthProvider accuracy store integration', () => {
       upsertSnapshots: vi.fn(),
       loadAdjustmentDecisions: vi.fn(),
       saveAdjustmentDecisions: vi.fn(),
+      dryRunImport: vi.fn(),
+      applyImport: vi.fn(),
     });
   });
 
@@ -109,6 +113,8 @@ describe('AuthProvider accuracy store integration', () => {
       upsertSnapshots: vi.fn(),
       loadAdjustmentDecisions: vi.fn(),
       saveAdjustmentDecisions: vi.fn(),
+      dryRunImport: vi.fn(),
+      applyImport: vi.fn(),
     };
 
     mockCreateSupabaseBrowserClient.mockReturnValue(browserClient);
@@ -157,6 +163,8 @@ describe('AuthProvider accuracy store integration', () => {
       upsertSnapshots: vi.fn(),
       loadAdjustmentDecisions: vi.fn(),
       saveAdjustmentDecisions: vi.fn(),
+      dryRunImport: vi.fn(),
+      applyImport: vi.fn(),
     };
 
     mockCreateLocalAccuracyStore.mockReturnValue(localStore);

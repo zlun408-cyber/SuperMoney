@@ -58,11 +58,13 @@
 - [x] 为 `/accuracy` 补齐 localStorage 种数 E2E
 - [x] 完成高阶 accuracy iteration：按交易日窗口、样本量、误差分布拆分可信度阈值
 - [x] 补齐异常基金排查视图：高误差基金、未收敛样本、连续偏差样本
-- [ ] P1：评估 estimate accuracy 样本从 localStorage 升级到云端/可导出的路径
-
+- [x] 完成 accuracy JSON 导出 / CSV 导出 / JSON 导入与 append-only 合并验证
+- [x] 完成 estimate accuracy 样本云端同步基础链路与 Supabase SQL
+- [x] P1：收口登录态 estimate accuracy 云端留存语义与失败降级验证
 ## P0 收口结论
 
 - [x] P0 已覆盖：详情页可信度判断、`/accuracy` 看板、异常基金排查、可信度分层解释
 - [x] P0 已完成：review / downgrade 状态下修正预览收紧
 - [x] P0 已完成：`/accuracy` 暴露“为什么当前是 low / medium / high”的内部诊断说明
-- [ ] P1 再做：样本导出、云端同步、跨设备留存、更复杂的 accuracy 运营能力
+- [x] P1 已完成：样本导出、JSON 导入、云端同步基础链路与登录态留存降级验证
+- [ ] 下一批：accuracy 云端 rollout 实环境验收、同步时间戳/重试队列可观测性、更复杂的 accuracy 运营能力

@@ -93,18 +93,18 @@
 - 已完成：交易录入表单新建态默认自动净值、失败后手填降级，编辑态显式“重新获取净值”
 - 已完成：定投自动生成去重回归测试补齐（缺 execution record 回填 / 同日多计划独立执行）
 - 已完成：交易表单自动净值成功 / 失败两条浏览器回归验证
-- 已完成：estimate accuracy baseline（本地样本采集 / 收敛 / 聚合与可信度分级）
-- 已完成：基金详情页 estimate confidence panel，展示估值可信度、收敛样本数与平均绝对误差
-- 已完成：`/accuracy` 内部准确度看板，支持读取本地 estimate accuracy 样本并按基金汇总误差表现
+- 已完成：accuracy JSON 导出 / CSV 导出 / JSON 导入与 append-only 合并验证
+- 已完成：estimate accuracy 云端同步基础链路与 Supabase accuracy SQL
+- 已完成：登录态下 estimate accuracy 本地 + 云端合并、失败降级与跨设备留存语义收口
 - 已完成：新增 `/accuracy` E2E，覆盖 localStorage 种数后的指标卡与基金行可见性
 - 已完成：高阶 accuracy iteration（按交易日窗口、样本量、误差分布拆分可信度阈值）
 - 已完成：异常基金排查视图与 `/accuracy` 可信度分层规则说明
 - 已完成：修复 `npm run test:e2e` 默认并发下用例完成后不退出的问题，Playwright 默认 workers 收紧为 1
 
 ## 当前主线
-- 当前正在推进：P0 收尾后的范围收紧与阶段切换
-- 当前完成到：第四阶段账本可读性增强、定投计划与执行回放稳定性、历史净值降级路径、estimate accuracy baseline、详情页 estimate confidence panel、`/accuracy` 准确度看板、准确度看板 E2E 回归验证、高阶可信度阈值迭代、异常基金排查视图、`/accuracy` 分层规则说明
-- 下一步：冻结 accuracy P0 功能面，把样本导出 / 云端化 / 跨设备留存降级到 P1 再评估
+- 当前正在推进：accuracy P1 云端留存 rollout 后的验证与可观测性阶段
+- 当前完成到：第四阶段账本可读性增强、定投计划与执行回放稳定性、历史净值降级路径、estimate accuracy baseline、详情页 estimate confidence panel、`/accuracy` 准确度看板、准确度看板 E2E 回归验证、高阶可信度阈值迭代、异常基金排查视图、`/accuracy` 分层规则说明、accuracy import/export、登录态 accuracy 云端留存语义与失败降级验证
+- 下一步：做 accuracy 云端 rollout 实环境验收，并评估同步时间戳、重试队列与诊断可观测性
 
 ## 关键决策
 - 项目目录名：`SuperFinance`

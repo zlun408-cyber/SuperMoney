@@ -75,6 +75,7 @@ export function FundDetailContent({ code }: FundDetailContentProps) {
         resolvedTradingDayCount: 0,
         highErrorResolvedSampleCount: 0,
         averageAbsoluteErrorRate: null,
+        averageSignedErrorRate: null,
         latestQuoteUpdatedAt: null,
         latestResolvedAt: null,
       });

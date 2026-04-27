@@ -208,26 +208,35 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
 
     return groups;
   }, [visibleTransactions]);
-  const toolbarSummary = `当前显示：${getFilterLabel(filterType)} · ${getSortLabel(sortOrder)} · 共 ${visibleTransactions.length} 条`;
+  const toolbarSummary = `${getFilterLabel(filterType)} · ${getSortLabel(sortOrder)} · 共 ${visibleTransactions.length} 条`;
 
   if (transactions.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center text-slate-500">
-        还没有交易记录，请先添加第一笔记录。
+      <div className="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50/50 py-12 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-slate-300 shadow-sm ring-1 ring-slate-200">
+           <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+          </svg>
+        </div>
+        <h3 className="mt-4 text-sm font-bold text-slate-900">暂无交易记录</h3>
+        <p className="mt-1 text-sm text-slate-500">点击“手动添加记录”按钮开启资产记账。</p>
       </div>
     );
   }
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <h3 className="text-lg font-semibold text-slate-900">交易记录</h3>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-lg border border-slate-200 p-1">
+    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/50">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b border-slate-100 pb-6">
+        <div>
+          <h3 className="text-xl font-bold text-slate-900">交易账本明细</h3>
+          <p className="mt-1 text-sm text-slate-400 font-medium uppercase tracking-wider">{toolbarSummary}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="inline-flex rounded-xl bg-slate-100 p-1">
             <button
               aria-pressed={sortOrder === 'desc'}
-              className={`rounded-md px-3 py-1.5 text-sm ${
-                sortOrder === 'desc' ? 'bg-slate-900 text-white' : 'text-slate-600'
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                sortOrder === 'desc' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
               }`}
               onClick={() => setSortOrder('desc')}
               type="button"
@@ -236,8 +245,8 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
             </button>
             <button
               aria-pressed={sortOrder === 'asc'}
-              className={`rounded-md px-3 py-1.5 text-sm ${
-                sortOrder === 'asc' ? 'bg-slate-900 text-white' : 'text-slate-600'
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                sortOrder === 'asc' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
               }`}
               onClick={() => setSortOrder('asc')}
               type="button"
@@ -245,138 +254,120 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
               最早在前
             </button>
           </div>
-          <div className="inline-flex rounded-lg border border-slate-200 p-1">
-            <button
-              aria-pressed={filterType === 'all'}
-              className={`rounded-md px-3 py-1.5 text-sm ${
-                filterType === 'all' ? 'bg-slate-100 text-slate-900' : 'text-slate-600'
-              }`}
-              onClick={() => setFilterType('all')}
-              type="button"
-            >
-              全部
-            </button>
-            <button
-              aria-pressed={filterType === 'buy'}
-              className={`rounded-md px-3 py-1.5 text-sm ${
-                filterType === 'buy' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600'
-              }`}
-              onClick={() => setFilterType('buy')}
-              type="button"
-            >
-              买入
-            </button>
-            <button
-              aria-pressed={filterType === 'sell'}
-              className={`rounded-md px-3 py-1.5 text-sm ${
-                filterType === 'sell' ? 'bg-amber-50 text-amber-700' : 'text-slate-600'
-              }`}
-              onClick={() => setFilterType('sell')}
-              type="button"
-            >
-              卖出
-            </button>
-            <button
-              aria-pressed={filterType === 'dividend'}
-              className={`rounded-md px-3 py-1.5 text-sm ${
-                filterType === 'dividend' ? 'bg-sky-50 text-sky-700' : 'text-slate-600'
-              }`}
-              onClick={() => setFilterType('dividend')}
-              type="button"
-            >
-              只看分红
-            </button>
+          <div className="inline-flex rounded-xl bg-slate-100 p-1">
+             {(['all', 'buy', 'sell', 'dividend'] as const).map((type) => (
+                <button
+                  key={type}
+                  aria-pressed={filterType === type}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                    filterType === type ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                  onClick={() => setFilterType(type)}
+                  type="button"
+                >
+                  {getFilterLabel(type)}
+                </button>
+             ))}
           </div>
         </div>
       </div>
-      <p className="mt-3 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-sm text-slate-500">{toolbarSummary}</p>
-      <div className="mt-4 space-y-4">
+
+      <div className="mt-8 space-y-10">
         {visibleTransactions.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
-            <p className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-sm text-amber-700">
-              当前筛选：{getFilterLabel(filterType)}
-            </p>
-            <p>当前筛选下还没有交易记录，试试切回“全部”查看完整账本。</p>
-            <button
-              className="mt-3 inline-flex rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700"
-              onClick={() => setFilterType('all')}
-              type="button"
-            >
-              切回全部
-            </button>
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 p-12 text-center">
+            <p className="text-sm font-bold text-slate-900">未找到符合筛选条件的记录</p>
+            <p className="mt-1 text-sm text-slate-500">试试切换到“全部”分类。</p>
           </div>
         ) : null}
+
         {groupedTransactions.map((group) => (
-          <div key={group.tradeDate}>
-            <p className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-sm font-medium text-slate-500">
-              {group.tradeDate} · {group.transactions.length} 笔 · 日内{getSortLabel(sortOrder)}
-            </p>
-            <ul className="mt-2 divide-y divide-slate-100">
+          <div key={group.tradeDate} className="relative">
+            <div className="flex items-center gap-4 mb-4">
+               <span className="shrink-0 rounded-lg bg-slate-900 px-3 py-1 text-xs font-bold text-white shadow-sm font-mono">
+                  {group.tradeDate}
+               </span>
+               <div className="h-px flex-1 bg-slate-100" />
+               <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  {group.transactions.length} 笔记录
+               </span>
+            </div>
+
+            <ul className="space-y-4">
               {group.transactions.map((transaction, index) => {
                 const snapshot = snapshotByTransactionId.get(transaction.id);
                 const previousSnapshot = previousSnapshotByTransactionId.get(transaction.id);
 
                 return (
-                  <li key={transaction.id} className="flex items-center justify-between gap-4 py-3">
-                    <div>
-                      <p>
+                  <li key={transaction.id} className="group relative flex items-start gap-4 rounded-2xl bg-slate-50/30 p-4 ring-1 ring-slate-100 transition hover:bg-slate-50 hover:ring-slate-200">
+                    <div className="flex flex-1 flex-col gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span
-                          className={`inline-flex rounded-full px-2.5 py-1 text-sm font-medium ${getTypeClassName(
+                          className={`inline-flex rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter ring-1 ring-inset ${getTypeClassName(
                             transaction.type,
-                          )}`}
+                          )} ring-current/20`}
                         >
                           {getTypeLabel(transaction.type)}
                         </span>
-                      </p>
-                      {group.transactions.length > 1 ? (
-                        <p className="mt-1 text-xs font-medium text-slate-400">
-                          当日第 {sameDaySequenceByTransactionId.get(transaction.id) ?? index + 1} 笔
-                        </p>
-                      ) : null}
-                      {getPlacedPeriodLabel(transaction) ? (
-                        <p className="mt-1 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-sm text-slate-500">
-                          下单：{getPlacedDateText(transaction)} · {getPlacedPeriodLabel(transaction)}
-                        </p>
-                      ) : null}
-                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <p className="text-sm text-slate-500">{getDateText(transaction)}</p>
-                        <span className="text-slate-300">·</span>
-                        <p className="text-sm font-semibold text-slate-900">{getValueText(transaction)}</p>
+                        {group.transactions.length > 1 && (
+                          <span className="text-[10px] font-bold text-slate-400">
+                            #{sameDaySequenceByTransactionId.get(transaction.id) ?? index + 1}
+                          </span>
+                        )}
+                        {getSourceLabel(transaction) && (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">
+                            {getSourceLabel(transaction)}
+                          </span>
+                        )}
                       </div>
-                      {'effectiveDate' in transaction ? (
-                        <p className="mt-1 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-sm text-slate-500">
-                          生效：{transaction.effectiveDate}
+
+                      <div className="flex flex-wrap items-baseline gap-x-2">
+                        <p className="text-base font-bold text-slate-900">{getValueText(transaction)}</p>
+                        {'effectiveDate' in transaction && transaction.effectiveDate !== getPlacedDateText(transaction) && (
+                          <p className="text-[10px] font-bold text-slate-400 uppercase">生效: {transaction.effectiveDate}</p>
+                        )}
+                      </div>
+
+                      {getPlacedPeriodLabel(transaction) && (
+                        <p className="text-[10px] font-medium text-slate-500 italic">
+                          于 {getPlacedDateText(transaction)} {getPlacedPeriodLabel(transaction)} 下单
                         </p>
-                      ) : null}
-                      {snapshot ? (
-                        <p
-                          className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-sm ${getImpactHintClassName(
-                            transaction.type,
-                          )}`}
-                        >
-                          {getImpactHint(transaction, snapshot, previousSnapshot)}
-                        </p>
-                      ) : null}
-                      {getExtraDetails(transaction).length > 0 ? (
-                        <p className="mt-1 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-sm text-slate-500">
-                          {getExtraDetails(transaction).join(' · ')}
-                        </p>
-                      ) : null}
-                      {transaction.note ? (
-                        <p className="mt-1 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-sm text-slate-500">
-                          备注：{transaction.note}
-                        </p>
-                      ) : null}
-                      {getSourceLabel(transaction) ? (
-                        <p className="mt-1 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-sm text-slate-500">
-                          来源：{getSourceLabel(transaction)}
-                        </p>
-                      ) : null}
+                      )}
+
+                      {snapshot && (
+                        <div className={`mt-1 flex items-center gap-2 rounded-lg ${getImpactHintClassName(transaction.type)} bg-current/5 px-2 py-1`}>
+                          <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                          </svg>
+                          <p className="text-[10px] font-bold tracking-tight">
+                            {getImpactHint(transaction, snapshot, previousSnapshot)}
+                          </p>
+                        </div>
+                      )}
+
+                      {getExtraDetails(transaction).length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                           {getExtraDetails(transaction).map((detail, idx) => (
+                             <span key={idx} className="text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                                {detail}
+                             </span>
+                           ))}
+                        </div>
+                      )}
+
+                      {transaction.note && (
+                        <div className="flex gap-1.5 items-start mt-1">
+                           <span className="mt-0.5 shrink-0 text-slate-300">
+                             <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/></svg>
+                           </span>
+                           <p className="text-[10px] font-medium text-slate-500 leading-relaxed">{transaction.note}</p>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center gap-2">
+
+                    <div className="flex items-center gap-2 self-center opacity-0 transition group-hover:opacity-100">
                       <button
                         aria-label={getActionLabel('编辑', transaction)}
-                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700"
+                        className="rounded-lg bg-white px-3 py-1.5 text-[10px] font-bold text-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 transition hover:bg-slate-50"
                         onClick={() => onEditTransaction?.(transaction)}
                         type="button"
                       >
@@ -384,7 +375,7 @@ export function TransactionList({ transactions, onEditTransaction, onDeleteTrans
                       </button>
                       <button
                         aria-label={getActionLabel('删除', transaction)}
-                        className="rounded-lg border border-rose-200 px-3 py-2 text-sm text-rose-600"
+                        className="rounded-lg bg-white px-3 py-1.5 text-[10px] font-bold text-rose-600 shadow-sm ring-1 ring-inset ring-rose-200 transition hover:bg-rose-50 hover:ring-rose-300"
                         onClick={() => onDeleteTransaction?.(transaction)}
                         type="button"
                       >

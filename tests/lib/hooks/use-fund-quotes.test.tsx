@@ -395,6 +395,8 @@ describe('useFundQuotes', () => {
         },
       })),
       saveAdjustmentDecisions: vi.fn(),
+      dryRunImport: vi.fn(),
+      applyImport: vi.fn(),
     };
 
     const { result } = renderHook(() =>
@@ -943,7 +945,7 @@ describe('useFundQuotes estimate accuracy side effects', () => {
     });
   });
 
-  it('ignores stale responses when a newer refresh resolves first', async () => {
+  it('queues at most one follow-up refresh instead of starting overlapping fetches', async () => {
     const firstRequest = createDeferred<FundQuote[]>();
     const secondRequest = createDeferred<FundQuote[]>();
     const fetcher = vi
@@ -964,16 +966,7 @@ describe('useFundQuotes estimate accuracy side effects', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(result.current.isRefreshing).toBe(true);
 
-    const newerQuotes: FundQuote[] = [
-      {
-        code: '000001',
-        name: '基金A',
-        estimatedNav: 1.25,
-        changeRate: 1.1,
-        updatedAt: '2026-04-13 14:31',
-      },
-    ];
-    const olderQuotes: FundQuote[] = [
+    const firstQuotes: FundQuote[] = [
       {
         code: '000001',
         name: '基金A',
@@ -982,154 +975,46 @@ describe('useFundQuotes estimate accuracy side effects', () => {
         updatedAt: '2026-04-13 14:30',
       },
     ];
-
-    let manualRefreshPromise: Promise<void>;
-    act(() => {
-      manualRefreshPromise = result.current.refresh();
-    });
-
-    await waitFor(() => {
-      expect(fetcher).toHaveBeenCalledTimes(2);
-    });
-
-    await act(async () => {
-      secondRequest.resolve(newerQuotes);
-      await Promise.resolve();
-    });
-
-    await waitFor(() => {
-      expect(result.current.quotes).toEqual(newerQuotes);
-      expect(result.current.lastUpdatedAt).toBe('2026-04-13 14:31');
-      expect(result.current.error).toBeNull();
-      expect(result.current.isRefreshing).toBe(false);
-      expect(saveSnapshots).toHaveBeenCalledTimes(1);
-      expect(saveSnapshots).toHaveBeenLastCalledWith(
-        expect.arrayContaining([
-          expect.objectContaining({
-            id: '000001::2026-04-13 14:31',
-          }),
-        ]),
-      );
-    });
-
-    await act(async () => {
-      firstRequest.resolve(olderQuotes);
-      await Promise.resolve();
-    });
-
-    await manualRefreshPromise!;
-
-    expect(result.current.quotes).toEqual(newerQuotes);
-    expect(result.current.lastUpdatedAt).toBe('2026-04-13 14:31');
-    expect(result.current.error).toBeNull();
-    expect(result.current.isRefreshing).toBe(false);
-    expect(saveSnapshots).toHaveBeenCalledTimes(1);
-  });
-
-  it('ignores stale request failures after a newer refresh succeeds', async () => {
-    const firstRequest = createDeferred<FundQuote[]>();
-    const secondRequest = createDeferred<FundQuote[]>();
-    const fetcher = vi
-      .fn()
-      .mockImplementationOnce(() => firstRequest.promise)
-      .mockImplementationOnce(() => secondRequest.promise);
-
-    const { result } = renderHook(() => useFundQuotes(['000001'], fetcher, 60_000));
-
-    await flushAsyncWork();
-    expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(result.current.isRefreshing).toBe(true);
-
-    let manualRefreshPromise: Promise<void>;
-    act(() => {
-      manualRefreshPromise = result.current.refresh();
-    });
-
-    await waitFor(() => {
-      expect(fetcher).toHaveBeenCalledTimes(2);
-    });
-
-    const newerQuotes: FundQuote[] = [
+    const secondQuotes: FundQuote[] = [
       {
         code: '000001',
         name: '基金A',
-        estimatedNav: 1.27,
-        changeRate: 1.3,
-        updatedAt: '2026-04-13 14:32',
+        estimatedNav: 1.25,
+        changeRate: 1.1,
+        updatedAt: '2026-04-13 14:31',
       },
     ];
-
-    await act(async () => {
-      secondRequest.resolve(newerQuotes);
-      await Promise.resolve();
-    });
-
-    await waitFor(() => {
-      expect(result.current.quotes).toEqual(newerQuotes);
-      expect(result.current.error).toBeNull();
-      expect(result.current.lastUpdatedAt).toBe('2026-04-13 14:32');
-      expect(result.current.isRefreshing).toBe(false);
-    });
-
-    await act(async () => {
-      firstRequest.reject(new Error('stale network failed'));
-      await Promise.resolve();
-    });
-
-    await expect(manualRefreshPromise!).resolves.toBeUndefined();
-
-    expect(result.current.quotes).toEqual(newerQuotes);
-    expect(result.current.error).toBeNull();
-    expect(result.current.lastUpdatedAt).toBe('2026-04-13 14:32');
-    expect(result.current.isRefreshing).toBe(false);
-  });
-
-  it('keeps isRefreshing true until the latest in-flight request completes', async () => {
-    const firstRequest = createDeferred<FundQuote[]>();
-    const secondRequest = createDeferred<FundQuote[]>();
-    const fetcher = vi
-      .fn()
-      .mockImplementationOnce(() => firstRequest.promise)
-      .mockImplementationOnce(() => secondRequest.promise);
-
-    const { result } = renderHook(() => useFundQuotes(['000001'], fetcher, 60_000));
-
-    await flushAsyncWork();
-    expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(result.current.isRefreshing).toBe(true);
 
     let manualRefreshPromise: Promise<void>;
     act(() => {
       manualRefreshPromise = result.current.refresh();
+      void result.current.refresh();
+    });
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      firstRequest.resolve(firstQuotes);
+      await Promise.resolve();
     });
 
     await waitFor(() => {
       expect(fetcher).toHaveBeenCalledTimes(2);
-      expect(result.current.isRefreshing).toBe(true);
     });
 
     await act(async () => {
-      firstRequest.resolve(sampleQuotes);
-      await Promise.resolve();
-    });
-
-    expect(result.current.isRefreshing).toBe(true);
-
-    await act(async () => {
-      secondRequest.resolve([
-        {
-          ...sampleQuotes[0],
-          estimatedNav: 1.08,
-          updatedAt: '2026-03-25T15:31:00.000Z',
-        },
-      ]);
+      secondRequest.resolve(secondQuotes);
       await Promise.resolve();
     });
 
     await manualRefreshPromise!;
 
+    expect(result.current.quotes).toEqual(secondQuotes);
+    expect(result.current.lastUpdatedAt).toBe('2026-04-13 14:31');
+    expect(result.current.error).toBeNull();
     expect(result.current.isRefreshing).toBe(false);
-    expect(result.current.lastUpdatedAt).toBe('2026-03-25T15:31:00.000Z');
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(saveSnapshots).toHaveBeenCalledTimes(2);
   });
 
   it('does not persist accuracy side effects after unmount', async () => {

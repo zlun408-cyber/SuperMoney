@@ -1370,4 +1370,18 @@ describe('AccuracyDashboard', () => {
     expect(within(fundRows[0]).getByText('观察基金')).toBeTruthy();
     expect(within(fundRows[1]).getByText('优先修正基金')).toBeTruthy();
   });
+
+  it('opens the import dialog when clicking the "导入 JSON" button', async () => {
+    render(<AccuracyDashboard />);
+
+    const importButton = screen.getByTestId('accuracy-import-json-trigger');
+    expect(importButton).toBeTruthy();
+
+    fireEvent.click(importButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('导入估值准确度数据')).toBeTruthy();
+      expect(screen.getByText('点击或拖拽 JSON 文件到此处')).toBeTruthy();
+    });
+  });
 });
